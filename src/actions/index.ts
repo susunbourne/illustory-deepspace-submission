@@ -1,0 +1,202 @@
+import { enqueueJob } from 'deepspace/worker'
+import type { ActionContext, ActionHandler, ActionResult, ActionTools } from 'deepspace/worker'
+import type { Env } from '../../worker'
+import { assetSlot, emptyStoryboard } from '../illustory/types'
+import { validStoryboard } from '../illustory/validation'
+import { cancelPrivateJob } from '../illustory/private-workflow'
+import type { Asset, Membership, Operation, Project, Row, TargetType, WorkflowJob, Workspace, WorkspaceRole } from '../illustory/types'
+
+const fail = (error: string, code = 'invalid_request'): ActionResult => ({ success: false, error, code })
+const ok = <T>(data: T): ActionResult<T> => ({ success: true, data })
+const str = (value: unknown, max = 5000) => typeof value === 'string' && value.trim().length > 0 && value.length <= max ? value.trim() : null
+const roles: WorkspaceRole[] = ['owner', 'editor', 'reviewer', 'viewer']
+const operations: Operation[] = ['parse', 'character', 'scene-anchor', 'first-frame', 'h3', 'seedvr2', 'export']
+const targetFor: Record<Operation, TargetType> = { parse: 'project', character: 'character', 'scene-anchor': 'scene', 'first-frame': 'shot', h3: 'shot', seedvr2: 'shot', export: 'project' }
+
+async function stableJobId(projectId: string, key: string): Promise<string> {
+  const input = new TextEncoder().encode(`${projectId.length}:${projectId}${key}`)
+  const digest = new Uint8Array(await crypto.subtle.digest('SHA-256', input))
+  const hex = [...digest.slice(0, 16)].map(byte => byte.toString(16).padStart(2, '0')).join('')
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`
+}
+
+async function member(tools: ActionTools, workspaceId: string, userId: string): Promise<Row<Membership> | null> {
+  const r = await tools.query<Membership>('memberships', { where: { workspaceId, userId }, limit: 10 })
+  if (!r.success) throw new Error(r.error)
+  return (r.data.records as Row<Membership>[]).find(x => x.data.status === 'active') ?? null
+}
+async function workspaceAccess(ctx: ActionContext<Env>, workspaceId: string, allowed?: WorkspaceRole[]) {
+  const m = await member(ctx.tools, workspaceId, ctx.userId)
+  return m && (!allowed || allowed.includes(m.data.role)) ? m : null
+}
+async function projectAccess(ctx: ActionContext<Env>, projectId: string, allowed?: WorkspaceRole[]): Promise<Row<Project> | null> {
+  const r = await ctx.tools.get<Project>('projects', projectId)
+  if (!r.success) return null
+  const p = r.data.record as Row<Project>
+  return await workspaceAccess(ctx, p.data.workspaceId, allowed) ? p : null
+}
+const listWorkspaces: ActionHandler<Env> = async ({ tools, userId }) => {
+  const r = await tools.query<Membership>('memberships', { where: { userId }, limit: 100 })
+  if (!r.success) return r
+  const items = []
+  for (const m of r.data.records as Row<Membership>[]) {
+    if (m.data.status !== 'active') continue
+    const w = await tools.get<Workspace>('workspaces', m.data.workspaceId)
+    if (w.success) items.push({ ...w.data.record, role: m.data.role })
+  }
+  return ok(items)
+}
+const createWorkspace: ActionHandler<Env> = async ({ params, tools, userId }) => {
+  const name = str(params.name, 120)
+  if (!name) return fail('Workspace name is required')
+  const id = crypto.randomUUID()
+  const w = await tools.create('workspaces', { name, ownerId: userId }, id)
+  if (!w.success) return w
+  const m = await tools.create('memberships', { workspaceId: id, userId, role: 'owner', status: 'active' })
+  if (!m.success) { await tools.remove('workspaces', id); return m }
+  return ok({ recordId: id, data: { name, ownerId: userId }, role: 'owner' })
+}
+const listMembers: ActionHandler<Env> = async ctx => {
+  const id = str(ctx.params.workspaceId, 100)
+  if (!id || !await workspaceAccess(ctx, id)) return fail('Workspace access denied', 'forbidden')
+  return ctx.tools.query<Membership>('memberships', { where: { workspaceId: id }, limit: 100 })
+}
+const setMemberRole: ActionHandler<Env> = async ctx => {
+  const workspaceId = str(ctx.params.workspaceId, 100), userId = str(ctx.params.userId, 200), role = ctx.params.role
+  if (!workspaceId || !userId || !roles.includes(role as WorkspaceRole)) return fail('Invalid membership')
+  if (!await workspaceAccess(ctx, workspaceId, ['owner'])) return fail('Owner required', 'forbidden')
+  const knownUser = await ctx.tools.get('users', userId)
+  if (!knownUser.success) return fail('User must sign in to this app before membership can be granted')
+  const matches = await ctx.tools.query<Membership>('memberships', { where: { workspaceId, userId }, limit: 10 })
+  if (!matches.success) return matches
+  const existing = matches.data.records[0] as Row<Membership> | undefined
+  if (existing?.data.role === 'owner' && existing.data.status === 'active' && role !== 'owner') {
+    const all = await ctx.tools.query<Membership>('memberships', { where: { workspaceId, role: 'owner', status: 'active' }, limit: 100 })
+    if (!all.success) return all
+    if (all.data.count <= 1) return fail('Workspace must retain an owner')
+  }
+  return existing ? ctx.tools.update('memberships', existing.recordId, { role, status: 'active' }) : ctx.tools.create('memberships', { workspaceId, userId, role, status: 'active' })
+}
+const listProjects: ActionHandler<Env> = async ctx => {
+  const id = str(ctx.params.workspaceId, 100)
+  if (!id || !await workspaceAccess(ctx, id)) return fail('Workspace access denied', 'forbidden')
+  return ctx.tools.query<Project>('projects', { where: { workspaceId: id }, limit: 100 })
+}
+const createProject: ActionHandler<Env> = async ctx => {
+  const workspaceId = str(ctx.params.workspaceId, 100), title = str(ctx.params.title, 150), script = str(ctx.params.script, 100_000)
+  if (!workspaceId || !title || !script) return fail('Title and script are required')
+  if (!await workspaceAccess(ctx, workspaceId, ['owner', 'editor'])) return fail('Edit permission required', 'forbidden')
+  const data: Project = { workspaceId, title, script, revision: 1, storyboard: emptyStoryboard(), currentAssets: {}, lastParseJobId: '', lastParseRevision: 0, createdByUserId: ctx.userId }
+  const r = await ctx.tools.create('projects', { ...data })
+  return r.success ? ok({ recordId: r.data.recordId, data }) : r
+}
+const getProject: ActionHandler<Env> = async ctx => {
+  const id = str(ctx.params.projectId, 100)
+  const p = id && await projectAccess(ctx, id)
+  return p ? ok(p) : fail('Project access denied', 'forbidden')
+}
+const saveProject: ActionHandler<Env> = async ctx => {
+  const id = str(ctx.params.projectId, 100)
+  const p = id && await projectAccess(ctx, id, ['owner', 'editor'])
+  if (!p) return fail('Edit permission required', 'forbidden')
+  if (ctx.params.expectedRevision !== p.data.revision) return fail('Project changed; reload before saving', 'revision_conflict')
+  const patch: Partial<Project> = { revision: p.data.revision + 1 }
+  if ('title' in ctx.params) { const v = str(ctx.params.title, 150); if (!v) return fail('Invalid title'); patch.title = v }
+  if ('script' in ctx.params) { const v = str(ctx.params.script, 100_000); if (!v) return fail('Invalid script'); patch.script = v }
+  if ('storyboard' in ctx.params) { if (!validStoryboard(ctx.params.storyboard)) return fail('Invalid storyboard'); patch.storyboard = ctx.params.storyboard }
+  const r = await ctx.tools.update('projects', p.recordId, { ...patch })
+  return r.success ? ok({ recordId: p.recordId, data: { ...p.data, ...patch } }) : r
+}
+const listAssets: ActionHandler<Env> = async ctx => {
+  const id = str(ctx.params.projectId, 100)
+  if (!id || !await projectAccess(ctx, id)) return fail('Project access denied', 'forbidden')
+  return ctx.tools.query<Asset>('assets', { where: { projectId: id }, limit: 200 })
+}
+const listJobs: ActionHandler<Env> = async ctx => {
+  const id = str(ctx.params.projectId, 100)
+  if (!id || !await projectAccess(ctx, id)) return fail('Project access denied', 'forbidden')
+  return ctx.tools.query<WorkflowJob>('workflow-jobs', { where: { projectId: id }, limit: 100 })
+}
+const requestJob: ActionHandler<Env> = async ctx => {
+  const projectId = str(ctx.params.projectId, 100), operation = ctx.params.operation as Operation
+  const targetId = str(ctx.params.targetId, 150), idempotencyKey = str(ctx.params.idempotencyKey, 200)
+  if (!projectId || !operations.includes(operation) || !targetId || !idempotencyKey || idempotencyKey.length < 8) return fail('Invalid job request')
+  const p = await projectAccess(ctx, projectId, operation === 'export' ? ['owner', 'reviewer'] : ['owner'])
+  if (!p) return fail(operation === 'export' ? 'Review permission required for export' : 'Owner approval required for billable work', 'forbidden')
+  if (ctx.params.expectedRevision !== p.data.revision) return fail('Project changed; reload before generating', 'revision_conflict')
+  const targetType = targetFor[operation]
+  if ((targetType === 'project' && targetId !== projectId) || (targetType === 'character' && !p.data.storyboard.characters.some(c => c.id === targetId))
+    || (targetType === 'scene' && !p.data.storyboard.scenes.some(s => s.id === targetId))
+    || (targetType === 'shot' && !p.data.storyboard.scenes.some(s => s.shots.some(q => q.id === targetId)))) return fail('Target does not exist')
+  if (operation === 'first-frame') {
+    const scene = p.data.storyboard.scenes.find(s => s.shots.some(q => q.id === targetId))
+    if (!scene || !p.data.currentAssets[assetSlot('scene-anchor', scene.id)]) return fail('Select a scene anchor before generating a first frame')
+    const shot = scene.shots.find(q => q.id === targetId)!
+    const missing = p.data.storyboard.characters.filter(c => shot.description.includes(c.name) && !p.data.currentAssets[assetSlot('character', c.id)])
+    if (missing.length) return fail(`Generate character references first: ${missing.map(c => c.name).join(', ')}`)
+  }
+  if (operation === 'h3' && !p.data.currentAssets[assetSlot('first-frame', targetId)]) return fail('Select a first frame before H3')
+  if (operation === 'seedvr2' && !p.data.currentAssets[assetSlot('h3', targetId)]) return fail('Select H3 video before enhancement')
+  if (operation === 'export' && !p.data.storyboard.scenes.some(s => s.shots.some(q => p.data.currentAssets[assetSlot('h3', q.id)] || p.data.currentAssets[assetSlot('seedvr2', q.id)]))) return fail('Generate at least one video before export')
+  const prior = await ctx.tools.query<WorkflowJob>('workflow-jobs', { where: { projectId, idempotencyKey }, limit: 2 })
+  if (!prior.success) return prior
+  if (prior.data.records.length) {
+    const existing = prior.data.records[0]
+    if (existing.data.operation !== operation || existing.data.targetId !== targetId || existing.data.inputRevision !== p.data.revision) return fail('Idempotency key reused for different input', 'idempotency_conflict')
+    return ok(existing)
+  }
+  const inputAssets: Record<string, { storageKey: string; mimeType: string; sha256: string; byteSize: number }> = {}
+  for (const [slot, assetId] of Object.entries(p.data.currentAssets)) {
+    const asset = await ctx.tools.get<Asset>('assets', assetId)
+    if (!asset.success || asset.data.record.data.projectId !== projectId) return fail('Selected asset is unavailable')
+    const a = asset.data.record.data
+    inputAssets[slot] = { storageKey: a.storageKey, mimeType: a.mimeType, sha256: a.sha256, byteSize: a.byteSize }
+  }
+  // A stable record ID makes concurrent requests with the same key contend
+  // for one durable row. The private adapter enforces the paid-work boundary.
+  const jobId = await stableJobId(projectId, idempotencyKey)
+  const job: WorkflowJob = { workspaceId: p.data.workspaceId, projectId, operation, targetType, targetId, inputRevision: p.data.revision,
+    idempotencyKey, status: 'queued', progress: 0, providerJobId: '', outputAssetId: '', outputVersion: 0, error: '', requestedByUserId: ctx.userId,
+    request: { script: p.data.script, storyboard: p.data.storyboard, parseJobId: p.data.lastParseJobId, inputAssets, options: ctx.params.options ?? {} } }
+  const created = await ctx.tools.create('workflow-jobs', { ...job }, jobId)
+  if (!created.success) {
+    const raced = await ctx.tools.get<WorkflowJob>('workflow-jobs', jobId)
+    if (raced.success) {
+      const existing = raced.data.record as Row<WorkflowJob>
+      if (existing.data.projectId === projectId && existing.data.idempotencyKey === idempotencyKey && existing.data.operation === operation
+        && existing.data.targetId === targetId && existing.data.inputRevision === p.data.revision) return ok(existing)
+    }
+    return created
+  }
+  try { await enqueueJob(ctx.env.JOB_ROOMS, `app:${ctx.env.DEEPSPACE_APP_ID}`, 'illustory-workflow', { jobId }, { maxAttempts: 2, enqueuedBy: ctx.userId }) }
+  catch { await ctx.tools.update('workflow-jobs', jobId, { status: 'failed', error: 'Queue unavailable' }); return fail('Could not enqueue job', 'queue_failed') }
+  return ok({ recordId: jobId, data: job })
+}
+const cancelJob: ActionHandler<Env> = async ctx => {
+  const id = str(ctx.params.jobId, 100)
+  if (!id) return fail('Job ID required')
+  const r = await ctx.tools.get<WorkflowJob>('workflow-jobs', id)
+  if (!r.success) return fail('Job not found')
+  const job = r.data.record as Row<WorkflowJob>
+  if (!await workspaceAccess(ctx, job.data.workspaceId, ['owner'])) return fail('Owner required', 'forbidden')
+  if (['succeeded', 'failed', 'cancelled', 'stale'].includes(job.data.status)) return fail('Job is terminal')
+  const cancelled = await ctx.tools.update('workflow-jobs', id, { status: 'cancelled' })
+  if (cancelled.success && job.data.providerJobId) {
+    try { await cancelPrivateJob(ctx.env, job.data.providerJobId) } catch { /* local cancellation still prevents publication */ }
+  }
+  return cancelled
+}
+const selectAsset: ActionHandler<Env> = async ctx => {
+  const projectId = str(ctx.params.projectId, 100), assetId = str(ctx.params.assetId, 100)
+  if (!projectId || !assetId) return fail('Project and asset required')
+  const p = await projectAccess(ctx, projectId, ['owner', 'reviewer'])
+  if (!p) return fail('Review permission required', 'forbidden')
+  const r = await ctx.tools.get<Asset>('assets', assetId)
+  if (!r.success || r.data.record.data.projectId !== projectId) return fail('Asset not found')
+  const a = r.data.record.data
+  const currentAssets = { ...p.data.currentAssets, [assetSlot(a.operation, a.targetId)]: assetId }
+  const saved = await ctx.tools.update('projects', projectId, { currentAssets, revision: p.data.revision + 1 })
+  return saved.success ? ok({ currentAssets, revision: p.data.revision + 1 }) : saved
+}
+
+export const actions: Record<string, ActionHandler<Env>> = { listWorkspaces, createWorkspace, listMembers, setMemberRole, listProjects, createProject, getProject, saveProject, listAssets, listJobs, requestJob, cancelJob, selectAsset }
