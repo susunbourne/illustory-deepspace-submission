@@ -28,6 +28,8 @@ export function validStoryboard(value: unknown): value is Storyboard {
         && Number.isInteger(q.durationSeconds) && q.durationSeconds >= 3 && q.durationSeconds <= 15
         && (q.characters === undefined || (Array.isArray(q.characters) && q.characters.every(v => safeId(v))))
         && optionalText(q.shotType, 120) && optionalText(q.cameraAngle, 120) && optionalText(q.timeOfDay, 120)
+        && (!q.shotType || ['close_up', 'medium_shot', 'wide_shot', 'extreme_wide'].includes(q.shotType))
+        && (!q.cameraAngle || ['three quarter angle', 'low angle looking up', 'high angle looking down'].includes(q.cameraAngle))
         && optionalText(q.location, 500) && optionalText(q.action) && optionalText(q.environmentDetails)
         && (q.emotions === undefined || (Array.isArray(q.emotions) && q.emotions.every(e => safeId(e.characterId)
           && ['tense', 'melancholy', 'fearful', 'determined', 'neutral'].includes(e.emotion))))

@@ -99,6 +99,7 @@ describe('workspace authorization and revisions', () => {
     expect(validStoryboard(board)).toBe(true)
     expect(validStoryboard({ ...board, scenes: [{ ...board.scenes[0], id: '../outside' }] })).toBe(false)
     expect(validStoryboard({ ...board, characters: [{ ...board.characters[0], id: 'q' }] })).toBe(false)
+    expect(validStoryboard({ ...board, scenes: [{ ...board.scenes[0], shots: [{ ...board.scenes[0].shots[0], shotType: 'front view' }] }] })).toBe(false)
   })
   it('enforces owner/editor/reviewer/viewer decisions on the server', async () => {
     const r = seeded();
