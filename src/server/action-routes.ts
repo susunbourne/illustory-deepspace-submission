@@ -57,6 +57,19 @@ export function registerActionRoutes(app: Hono<AppContext>, resolveAuth: Resolve
     if (!action) return c.json({ error: 'Action not found' }, 404)
     const params = await c.req.json<Record<string, unknown>>()
     const tools = createActionTools(c.env, auth.userId, callerJwt)
+    // This app deliberately closes the generic RecordRoom WebSocket because its
+    // room scope is broader than a workspace. That also removes the SDK's
+    // usual WS-connect user seeding. Seed on initial workspace discovery from
+    // verified JWT claims so membership lookup and owner email still work.
+    if (name === 'listWorkspaces' || name === 'createWorkspace') {
+      const seeded = await tools.registerUser({
+        userId: auth.userId,
+        name: typeof auth.claims.name === 'string' ? auth.claims.name : undefined,
+        email: typeof auth.claims.email === 'string' ? auth.claims.email : undefined,
+        imageUrl: typeof auth.claims.image === 'string' ? auth.claims.image : undefined,
+      })
+      if (!seeded.success) return c.json(seeded as unknown as Record<string, unknown>)
+    }
     const result = await action({ userId: auth.userId, params, tools, env: c.env, callerJwt })
     return c.json(result as unknown as Record<string, unknown>)
   })

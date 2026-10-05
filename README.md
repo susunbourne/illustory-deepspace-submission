@@ -2,7 +2,7 @@
 
 An authenticated, workspace-scoped production control plane for one short-video workflow: script → editable storyboard → character and scene references → first frame → H3 motion → optional SeedVR2 enhancement → selected versions and trims → FFmpeg export.
 
-**Current status:** the reviewable app and offline tests are present. This checkout has **not** been registered, run with the intended DeepSpace account, deployed, or connected to a paid private engine. No generated video is claimed as a verified result. The GPU workflow engine is a separate private service that is **not included** in this review repository.
+**Current status:** this checkout is registered under the intended DeepSpace account and runs locally. Authenticated browser tests created workspaces, projects and editable storyboard records, verified refresh persistence, and exercised all four workspace roles. The app has **not** been deployed or connected to a paid private engine; no generated video is claimed as a verified result. The GPU workflow engine is a separate private service that is **not included** in this review repository.
 
 ## Why this split
 
@@ -21,11 +21,12 @@ npm run test:unit
 npm run lint
 npx deepspace auth whoami --json
 npx deepspace auth login       # only if signed out; complete in your browser
-npx deepspace app init         # register this app and mint its immutable ID
 npx deepspace dev start
+npx deepspace test run smoke --port 5174
+npx deepspace test run tests/roles.spec.ts --port 5174
 ```
 
-`app init` registers the app under the logged-in account and writes its immutable ID to `wrangler.toml`; check `auth whoami` first. It does not select the app's permanent source. `dev start` runs the local Vite and Worker stack after registration. `vite build` needs the server-minted ID; do not replace `__APP_ID__` by hand. Local tests use an unmistakable test-only sentinel without registering an app.
+This checkout already has its server-minted immutable ID in `wrangler.toml`. For a fresh fork without an ID, run `npx deepspace app init` after login; it registers the app but does not deploy or select its permanent source. `dev start` runs the local Vite and Worker stack. The browser suites use local test accounts managed by `npx deepspace test accounts`; never put their passwords in this repository.
 
 To connect the private engine, configure `PRIVATE_WORKFLOW_URL` and `PRIVATE_WORKFLOW_TOKEN` in the [DeepSpace encrypted secrets store](https://docs.deep.space/guides/secrets). For optional export mail, configure `EMAIL_FROM` to a sender address accepted by the Catalog email provider. The private URL must use HTTPS outside localhost. Never add the token to `VITE_` variables, source control, logs, or a browser request. The separate private adapter runs from the owner's environment and imports the existing Illustory engine without copying it here. Its source and data directory are intentionally outside this repository.
 
@@ -38,7 +39,7 @@ To connect the private engine, configure `PRIVATE_WORKFLOW_URL` and `PRIVATE_WOR
 5. The owner asks the private engine for a first frame conditioned on the selected references, then H3 and optionally SeedVR2. The private service retains large binaries. Before publishing a version, the Worker verifies the private file exists and matches SHA-256 and byte size. Reviewers or owners can select a version.
 6. Editors set trims. An owner or reviewer requests export; the private service uses selected clips and FFmpeg. The browser reads assets through a workspace-authorized proxy with range support for video. If the owner enables export mail, the Catalog Email endpoint sends a completion note to the active workspace owner's account email. A mail failure is recorded without changing export success.
 
-The Studio refreshes authorized job and asset state every three seconds. Browser WebSocket routes are closed because the scaffold's rooms do not provide workspace-level authorization; JobRoom remains a DeepSpace background primitive. A server action filters reads by current workspace membership. Collection-level direct client reads/writes are denied for product data.
+The Studio refreshes authorized job and asset state every three seconds. Browser WebSocket routes are closed because the scaffold's rooms do not provide workspace-level authorization; JobRoom remains a DeepSpace background primitive. The authenticated workspace-discovery action seeds the SDK's `users` row from verified JWT claims because the normal WebSocket seeding path is closed. A server action filters reads by current workspace membership. Collection-level direct client reads/writes are denied for product data.
 
 ## Roles
 
@@ -60,7 +61,7 @@ All endpoints require a server-side bearer token. `PUT /v1/catalog-assets/{jobId
 
 ## Verification so far
 
-`npm run type-check`, `npm run lint`, and `npm run test:unit` pass locally (23 TypeScript tests). The private adapter's `python -m pytest -q -p no:cacheprovider test_contract.py` passes (8 tests using the original app's `.venv`). These are offline checks, including Catalog call boundaries, role decisions, media authorization, original H3 input mapping and result-publication rules. `npm run build` currently stops at the scaffold's `__APP_ID__` placeholder; the official CLI must mint an ID after the intended owner signs in. The real DeepSpace runtime, persistence after refresh, OAuth sign-in, media playback, and a paid one-shot generation/export remain unverified. The owner has postponed login and has not approved paid calls.
+`npm run type-check`, `npm run lint`, `npm run build`, and `npm run test:unit` pass locally (24 TypeScript tests). `npx deepspace test run smoke --port 5174` passed all six browser smoke tests, and `npx deepspace test run tests/roles.spec.ts --port 5174` passed the four-role browser flow. These tests exercised the real local DeepSpace runtime with SDK test accounts: project script and manually edited cast/scene/shot records survived refresh. The private adapter's `python -m pytest -q -p no:cacheprovider test_contract.py` passed eight offline tests using the original app's `.venv`. The user's own browser review, Catalog responses, private media playback, paid generation/export and online deployment remain unverified. No paid calls were approved or launched.
 
 ## Tradeoffs and limits
 

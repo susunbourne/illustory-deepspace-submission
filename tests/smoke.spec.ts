@@ -1,12 +1,12 @@
-import { test, expect } from '@playwright/test'
+import { test, expect } from 'deepspace/testing'
 import { captureConsoleErrors } from './helpers/errors'
 
 /**
  * Smoke tests covering both page kinds this template ships:
  *   - '/'      → the static landing (top level of src/pages/): no providers,
  *                so no auth fetch and no records WebSocket on load.
- *   - '/home'  → a dynamic page (under src/pages/(app)/): the providers mount,
- *                the nav shell renders, and the records WebSocket connects.
+ *   - '/studio' → a protected production page: signed-out visitors see the
+ *                 DeepSpace login gate, while signed-in users can edit records.
  *
  * The "static contract" test is the guardrail for the per-page opt-out: if
  * someone moves the providers back up into _app.tsx, it fails.
@@ -52,15 +52,50 @@ test.describe('Smoke tests', () => {
     expect(offenders).toEqual([])
   })
 
-  test('dynamic app boundary mounts on /home', async ({ page }) => {
-    await page.goto('/home')
-    await expect(page.getByTestId('app-navigation')).toBeVisible({ timeout: 15000 })
+  test('protected studio shows the DeepSpace login gate when signed out', async ({ page }) => {
+    await page.goto('/studio')
+    await expect(page.getByRole('heading', { name: 'Sign in to DeepSpace' })).toBeVisible({ timeout: 15000 })
+    await expect(page.getByText('Studio workspace name')).toHaveCount(0)
   })
 
-  test('sign-in button visible when logged out', async ({ page }) => {
-    await page.goto('/home')
-    await expect(page.getByTestId('nav-sign-in-button')).toBeVisible({ timeout: 15000 })
-    await expect(page.getByTestId('nav-user-name')).toHaveCount(0)
+  test('signed-in owner creates a workspace and project that survive refresh', async ({ users }) => {
+    test.setTimeout(90_000)
+    const [owner] = await users(['Illustory owner'])
+    await owner.page.goto('/studio')
+    await expect(owner.page.getByRole('heading', { name: 'From script to finished scene.' })).toBeVisible({ timeout: 15000 })
+    const workspaceName = `Smoke studio ${Date.now()}`
+    await owner.page.getByRole('button', { name: 'New workspace' }).click()
+    await owner.page.getByPlaceholder('Studio workspace name').fill(workspaceName)
+    await owner.page.getByRole('button', { name: 'Create workspace' }).click()
+    await expect(owner.page.getByText('OWNER ACCESS')).toBeVisible()
+    const projectName = `Smoke scene ${Date.now()}`
+    await owner.page.getByPlaceholder('Project title').fill(projectName)
+    await owner.page.getByPlaceholder('Brief synopsis for visual research').fill('A quiet meeting at a station.')
+    await owner.page.getByPlaceholder('Paste a short script to begin').fill('INT. STATION - NIGHT. Ari waits beneath a clock.')
+    await owner.page.getByRole('button', { name: 'Create project' }).click()
+    await expect(owner.page.getByRole('heading', { name: projectName })).toBeVisible()
+    await owner.page.getByRole('button', { name: 'Cast', exact: true }).click()
+    await owner.page.getByRole('button', { name: 'Add character' }).click()
+    await owner.page.locator('.is-card-body input').fill('Ari')
+    await owner.page.getByRole('button', { name: 'Scenes', exact: true }).click()
+    await owner.page.getByRole('button', { name: 'Add scene' }).click()
+    await owner.page.locator('.is-card-body input').fill('Station platform')
+    await owner.page.getByRole('button', { name: 'Shots', exact: true }).click()
+    await owner.page.getByRole('button', { name: 'Add shot' }).click()
+    await owner.page.locator('.is-shot-content > input').fill('Clock close-up')
+    await owner.page.getByPlaceholder('Action and composition').fill('Ari studies the station clock.')
+    await owner.page.getByRole('button', { name: 'Save changes' }).click()
+    await expect(owner.page.getByText('REV 2')).toBeVisible()
+    await owner.page.reload()
+    await expect(owner.page.getByRole('button', { name: projectName })).toBeVisible({ timeout: 15000 })
+    await owner.page.getByRole('button', { name: projectName }).click()
+    await expect(owner.page.getByRole('heading', { name: projectName })).toBeVisible({ timeout: 15000 })
+    await expect(owner.page.locator('textarea.is-script')).toHaveValue('INT. STATION - NIGHT. Ari waits beneath a clock.')
+    await owner.page.getByRole('button', { name: 'Shots', exact: true }).click()
+    await expect(owner.page.locator('.is-shot-content > input')).toHaveValue('Clock close-up')
+    if (process.env.ILLUSTORY_SCREENSHOT_PATH) {
+      await owner.page.screenshot({ path: process.env.ILLUSTORY_SCREENSHOT_PATH, fullPage: true })
+    }
   })
 
   test('unknown route shows 404', async ({ page }) => {

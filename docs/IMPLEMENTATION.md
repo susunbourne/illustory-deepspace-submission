@@ -46,14 +46,14 @@ DeepSpace RecordRoom holds persistent workspace membership, projects, scripts, s
 
 | Criterion | Current evidence | Classification |
 |---|---|---|
-| Four-role server authorization | Unit tests call server actions as owner/editor/reviewer/viewer; read/edit/billable behavior checked | Implemented offline; runtime verification required |
+| Four-role server authorization | Unit tests call server actions as owner/editor/reviewer/viewer; a real browser test signs in four SDK test accounts and checks their workspace controls | Implemented locally; direct live attack checks still required |
 | Revision and stale result rejection | Unit tests change project revision before completion; no asset created | Implemented offline; concurrent edit race remains |
 | Idempotent request and private submission | Concurrent action test creates one workflow row; adapter contract test repeats the same key and rejects changed input | Implemented offline |
 | Cancelled/failed do not publish | Unit tests; adapter cancellation contract test | Implemented offline |
 | Old media cannot attach to a reparsed storyboard | Parse clears current selections; creative edits invalidate them, trim-only edits preserve them | Implemented offline |
 | Private asset integrity and access | Worker checks HEAD hash/size; adapter path isolation and Range tested | Implemented offline; live media test required |
 | Catalog OpenAI, ElevenLabs, YouTube and Email | Endpoint schemas checked with official CLI; server-side action/job paths implemented; offline call mocks verify search, voices, parse and speech publication | Implemented offline; provider responses and billing unverified |
-| Login, refresh persistence and browser workflow | Requires intended owner DeepSpace CLI login and minted app ID | Blocked for runtime verification |
+| Login, refresh persistence and browser workflow | Intended owner CLI login and app registration succeeded; six browser smoke tests include sign-in, workspace/project creation, manual storyboard editing and refresh persistence | Implemented locally; owner's hands-on review pending |
 | One actual H3/export run | Requires reachable private adapter and approved paid spend | Not verified |
 | Atomic same-project concurrent edits | RecordRoom action performs read then update without transactional compare-and-swap | Must implement before shared production editing; not needed for one-editor exercise proof |
 
@@ -89,7 +89,7 @@ The [StoryNest](https://github.com/deepdotspace/storynest) reference uses a JobR
 
 | Gap | Evidence | Severity | Category | Required action | Status |
 |---|---|---|---|---|---|
-| Runtime app identity and browser flow | CLI reports `not_authenticated`; `vite build` rejects `__APP_ID__` | High | Must Implement | Intended owner logs in; run `dev start`, browser and multi-user tests | Open |
+| Owner hands-on acceptance | SDK test accounts passed the local browser flow; the owner has not reviewed the UI in their own browser | Medium | Must Implement | Review the five Studio stages locally and fix mismatches | Open |
 | Private one-shot execution | No private HTTPS URL, provider credentials or spend approval supplied | High | Must Implement | Connect adapter, approve a single-run ceiling, observe parse→export | Open |
 | Catalog response and cost verification | No authenticated paid call yet; output envelopes and image/voice prices may vary by account | High | Must Implement | One capped call per selected endpoint; record response shape and actual charge | Open |
 | Concurrent edit atomicity | Server action reads revision then updates separately | Medium | Must Understand | Add serialized/conditional project write before true multi-editor customer use | Open |

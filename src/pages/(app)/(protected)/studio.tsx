@@ -53,6 +53,7 @@ export default function Studio() {
   const [draftBoard, setDraftBoard] = useState<Storyboard>(emptyStoryboard())
   const [dirty, setDirty] = useState(false)
   const [newWorkspace, setNewWorkspace] = useState('')
+  const [showWorkspaceForm, setShowWorkspaceForm] = useState(false)
   const [newTitle, setNewTitle] = useState('')
   const [newDescription, setNewDescription] = useState('')
   const [newScript, setNewScript] = useState('')
@@ -109,7 +110,7 @@ export default function Studio() {
     try { await task() } catch (error) { setMessage(error instanceof Error ? error.message : String(error)) }
     finally { setBusy('') }
   }
-  async function createWorkspace() { await run('workspace', async () => { const w = await action<WorkspaceRow>('createWorkspace', { name: newWorkspace }); setNewWorkspace(''); await loadWorkspaces(); setWorkspaceId(w.recordId) }) }
+  async function createWorkspace() { await run('workspace', async () => { const w = await action<WorkspaceRow>('createWorkspace', { name: newWorkspace }); setNewWorkspace(''); setShowWorkspaceForm(false); await loadWorkspaces(); setWorkspaceId(w.recordId) }) }
   async function createProject() { await run('project', async () => { const p = await action<Row<Project>>('createProject', { workspaceId, title: newTitle, description: newDescription, script: newScript }); setNewTitle(''); setNewDescription(''); setNewScript(''); await loadProjects(workspaceId); setProjectId(p.recordId) }) }
   async function save() {
     if (!project) return
@@ -141,11 +142,11 @@ export default function Studio() {
   return <div className="is-studio">
     <aside className="is-sidebar">
       <div className="is-brand"><span className="is-brand-mark">I<span>.</span></span><div><strong>ILLUSTORY</strong><small>PRODUCTION STUDIO</small></div></div>
-      <div className="is-sidebar-section"><label>WORKSPACE</label><select value={workspaceId} onChange={e => { setWorkspaceId(e.target.value); setProjectId('') }}><option value="">Select workspace</option>{workspaces.map(w => <option key={w.recordId} value={w.recordId}>{w.data.name}</option>)}</select></div>
+      <div className="is-sidebar-section"><label>WORKSPACE</label><select value={workspaceId} onChange={e => { setWorkspaceId(e.target.value); setProjectId('') }}><option value="">Select workspace</option>{workspaces.map(w => <option key={w.recordId} value={w.recordId}>{w.data.name}</option>)}</select>{!showWorkspaceForm && <button className="is-quiet" onClick={() => setShowWorkspaceForm(true)}><Plus size={14} /> New workspace</button>}</div>
       {activeWorkspace && <div className="is-role">{role?.toUpperCase()} ACCESS</div>}
       <div className="is-sidebar-section"><label>PROJECTS</label><div className="is-project-list">{projects.map(p => <button key={p.recordId} className={projectId === p.recordId ? 'active' : ''} onClick={() => setProjectId(p.recordId)}><Film size={15} />{p.data.title}</button>)}</div></div>
       {workspaceId && canEdit && <div className="is-create"><input placeholder="Project title" value={newTitle} onChange={e => setNewTitle(e.target.value)} /><textarea placeholder="Brief synopsis for visual research" value={newDescription} onChange={e => setNewDescription(e.target.value)} rows={2} /><textarea placeholder="Paste a short script to begin" value={newScript} onChange={e => setNewScript(e.target.value)} rows={4} /><button disabled={!!busy || !newTitle.trim() || !newScript.trim()} onClick={createProject}><Plus size={15} /> Create project</button></div>}
-      {!workspaceId && <div className="is-create"><input placeholder="Studio workspace name" value={newWorkspace} onChange={e => setNewWorkspace(e.target.value)} /><button disabled={!!busy || !newWorkspace.trim()} onClick={createWorkspace}><Plus size={15} /> Create workspace</button></div>}
+      {showWorkspaceForm && <div className="is-create"><input placeholder="Studio workspace name" value={newWorkspace} onChange={e => setNewWorkspace(e.target.value)} /><button disabled={!!busy || !newWorkspace.trim()} onClick={createWorkspace}><Plus size={15} /> Create workspace</button><button className="is-quiet" onClick={() => { setShowWorkspaceForm(false); setNewWorkspace('') }}>Cancel</button></div>}
       <div className="is-sidebar-footer">DeepSpace creative workflow · Private GPU execution</div>
     </aside>
     <main className="is-main">

@@ -12,34 +12,36 @@ The original Git root had 136 pre-existing status entries at the start and still
 
 | Area | Main files | Status |
 |---|---|---|
-| DeepSpace auth shell and protected Studio | `src/pages/(app)/_layout.tsx`, `studio.tsx`, `worker.ts` | Code complete; login runtime unverified |
-| Workspace/project/storyboard and role checks | `src/actions/index.ts`, `src/schemas/illustory-schemas.ts` | Unit tested |
+| DeepSpace auth shell and protected Studio | `src/pages/(app)/_layout.tsx`, `studio.tsx`, `worker.ts` | Registered and started locally; test-account browser flow passed |
+| Workspace/project/storyboard and role checks | `src/actions/index.ts`, `src/schemas/illustory-schemas.ts` | Unit and four-account browser tests passed |
 | Durable job and asset version control | `src/jobs.ts`, `src/illustory/private-workflow.ts` | Unit tested; external provider not exercised |
 | DeepSpace Catalog integrations | `src/illustory/creative.ts`, `src/illustory/catalog.ts`, `src/integrations.ts` | OpenAI parse/images, ElevenLabs voices/speech, YouTube research, Email export notice wired; offline checks only |
 | Private media proxy and access check | `src/server/illustory-routes.ts` | Code and private range contract tested |
 | Existing-engine bridge | Private adapter `bridge.py` outside repo | Auth/idempotency/restart/path tests pass; model/GPU path unverified |
-| Reviewer-facing UI | `studio.tsx`, `studio.css`, `src/pages/index.tsx` | Type/lint pass; browser runtime unverified |
+| Reviewer-facing UI | `studio.tsx`, `studio.css`, `src/pages/index.tsx` | Build and browser smoke passed; owner review pending |
 
 Commands and observed results:
 
 ```sh
 npm run type-check       # passed
-npm run test:unit        # 23 tests passed
+npm run test:unit        # 24 tests passed
 npm run lint             # passed
+npm run build            # passed after official app init
+npx deepspace test run smoke --port 5174                # 6 passed
+npx deepspace test run tests/roles.spec.ts --port 5174  # 1 four-account flow passed
 # In private adapter dir, with ILLUSTORY_SOURCE_ROOT set and original .venv Python:
 python -m pytest -q -p no:cacheprovider test_contract.py  # 8 passed, 1 deprecation warning
 ```
 
-`npm run build` currently refuses the scaffold placeholder `__APP_ID__`; the official CLI reports `not_authenticated`. The owner chose to log in later and declined paid calls for now. After logging in as the intended owner, run `npx deepspace app init` to mint and write the ID; `dev start` does not register the app. No ID was fabricated. `npx deepspace dev start`, login/browser interaction, persistence across reload, multi-user integration, live media and paid one-shot rendering have not been verified.
+The owner signed in to the CLI and official `app init` minted this checkout's ID. `npx deepspace dev start --json` reported ready at `http://localhost:5173/`. SDK test accounts verified sign-in, manual storyboard persistence after reload and owner/editor/reviewer/viewer controls. The owner's own browser review, live media, Catalog billing and paid one-shot rendering have not been verified. The app source remains unclaimed; no remote, push, deploy or portal submission exists.
 
 `npm audit` reports four high advisories in the build-only route generator dependency chain (`@generouted/react-router` → `fast-glob` → `micromatch` → `braces`) with no upstream fix published, and one low advisory in `esbuild`'s Windows development server. `npm audit --omit=dev` reports only that low `esbuild` advisory. No vulnerable service endpoint is intentionally exposed by the app, and this repository has not been deployed; recheck advisories before release.
 
 ## Next verification gate
 
-1. Intended owner runs `npx deepspace auth login` in the new repository, confirms `auth whoami`, then `npx deepspace app init` and `npx deepspace dev start`. App init registers an ID but does not push or deploy or latch source.
-2. In the browser, create a workspace and project, refresh, then verify the records survive. Use four test users to exercise owner/editor/reviewer/viewer with direct API attempts in addition to hidden controls.
-3. Configure the private adapter in the owner's private environment and expose it through an authenticated HTTPS ingress. Put URL/token in the DeepSpace encrypted secrets store; restart dev. Do not copy those values into this repository.
-4. After setting an approved cost ceiling, run one short script/one shot from Catalog parse through OpenAI references, an ElevenLabs voice, private first frame and H3, optional SeedVR2, and export. Search optional YouTube references and enable Email export notice if a sender address is available. Record job IDs, revisions, asset hashes, error outcomes, timing and actual bills. Then deliberately edit during a running job and cancel one to verify stale/cancel behavior in the live runtime.
+1. The owner reviews the local Studio at `http://localhost:5173/studio` with their own browser account and identifies product/UX mismatches. The server must be running; `npx deepspace dev start` restarts it if needed.
+2. Configure the private adapter in the owner's private environment and expose it through an authenticated HTTPS ingress. Put URL/token in the DeepSpace encrypted secrets store; restart dev. Do not copy those values into this repository.
+3. After setting an approved cost ceiling, run one short script/one shot from Catalog parse through OpenAI references, an ElevenLabs voice, private first frame and H3, optional SeedVR2, and export. Search optional YouTube references and enable Email export notice if a sender address is available. Record job IDs, revisions, asset hashes, error outcomes, timing and actual bills. Then deliberately edit during a running job and cancel one to verify stale/cancel behavior in the live runtime.
 
 ## Cost planning
 
