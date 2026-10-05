@@ -89,7 +89,7 @@ The [StoryNest](https://github.com/deepdotspace/storynest) reference uses a JobR
 
 | Gap | Evidence | Severity | Category | Required action | Status |
 |---|---|---|---|---|---|
-| Owner hands-on acceptance | SDK test accounts passed the local browser flow; the owner has not reviewed the UI in their own browser | Medium | Must Implement | Review the five Studio stages locally and fix mismatches | Open |
+| Owner hands-on acceptance | The owner reviewed the local page and reported misplaced status/membership panels; the layout was corrected and role-browser tested, but full stage acceptance is pending | Medium | Must Implement | Review the five Studio stages locally and fix remaining mismatches | In progress |
 | Private one-shot execution | No private HTTPS URL, provider credentials or spend approval supplied | High | Must Implement | Connect adapter, approve a single-run ceiling, observe parse→export | Open |
 | Catalog response and cost verification | No authenticated paid call yet; output envelopes and image/voice prices may vary by account | High | Must Implement | One capped call per selected endpoint; record response shape and actual charge | Open |
 | Concurrent edit atomicity | Server action reads revision then updates separately | Medium | Must Understand | Add serialized/conditional project write before true multi-editor customer use | Open |

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useAuth } from 'deepspace'
-import { ArrowLeft, Clapperboard, Film, Image as ImageIcon, Layers, LoaderCircle, Plus, RefreshCw, Save, Sparkles, Users, X } from 'lucide-react'
+import { Activity, ArrowLeft, Clapperboard, Film, Image as ImageIcon, Layers, LoaderCircle, Plus, RefreshCw, Save, Settings2, Sparkles, Users, X } from 'lucide-react'
 import { action, assetObjectUrl } from '../../../illustory/client'
 import { assetSlot, emptyStoryboard } from '../../../illustory/types'
 import type { Asset, Character, Operation, Project, Row, Scene, Shot, Storyboard, VideoReference, WorkflowJob, Workspace, WorkspaceRole } from '../../../illustory/types'
@@ -62,8 +62,10 @@ export default function Studio() {
   const [references, setReferences] = useState<VideoReference[]>([])
   const [memberId, setMemberId] = useState('')
   const [memberRole, setMemberRole] = useState<WorkspaceRole>('viewer')
+  const [drawer, setDrawer] = useState<'activity' | 'members' | null>(null)
   const [busy, setBusy] = useState('')
   const [message, setMessage] = useState('')
+  const [sessionExpired, setSessionExpired] = useState(false)
 
   const activeWorkspace = workspaces.find(w => w.recordId === workspaceId)
   const role = activeWorkspace?.role
@@ -73,6 +75,13 @@ export default function Studio() {
   const assetById = useMemo(() => new Map(assets.map(a => [a.recordId, a])), [assets])
   const currentAsset = (operation: Operation, targetId: string) => assetById.get(project?.data.currentAssets[assetSlot(operation, targetId)] ?? '')
   const activeJobs = jobs.filter(j => j.data.status === 'queued' || j.data.status === 'running')
+
+  useEffect(() => {
+    if (!drawer) return
+    const closeOnEscape = (event: KeyboardEvent) => { if (event.key === 'Escape') setDrawer(null) }
+    window.addEventListener('keydown', closeOnEscape)
+    return () => window.removeEventListener('keydown', closeOnEscape)
+  }, [drawer])
 
   const loadWorkspaces = useCallback(async () => {
     const rows = await action<WorkspaceRow[]>('listWorkspaces')
@@ -92,14 +101,17 @@ export default function Studio() {
     return p
   }, [])
 
-  useEffect(() => { if (userId) loadWorkspaces().catch(e => setMessage(String(e))) }, [userId, loadWorkspaces])
+  useEffect(() => { setSessionExpired(false); if (userId) loadWorkspaces().catch(e => setMessage(String(e))) }, [userId, loadWorkspaces])
   useEffect(() => { if (!workspaceId) return; loadProjects(workspaceId).catch(e => setMessage(String(e))); action<List<{ userId: string; role: WorkspaceRole; status: string }>>('listMembers', { workspaceId }).then(r => setMembers(r.records)).catch(() => {}) }, [workspaceId, loadProjects])
   useEffect(() => { if (!projectId) { setProject(null); return }; loadProject(projectId, true).catch(e => setMessage(String(e))) }, [projectId, loadProject])
   useEffect(() => {
-    if (!projectId) return
-    const timer = setInterval(() => { loadProject(projectId).catch(e => setMessage(String(e))) }, 3000)
+    if (!projectId || !userId || sessionExpired) return
+    const timer = setInterval(() => { loadProject(projectId).catch(e => {
+      if (String(e).includes('Sign in to continue')) { setSessionExpired(true); setMessage('Your session is unavailable. Reload to sign in again.'); return }
+      setMessage(String(e))
+    }) }, 3000)
     return () => clearInterval(timer)
-  }, [projectId, loadProject])
+  }, [projectId, userId, sessionExpired, loadProject])
   useEffect(() => {
     if (!project || dirty) return
     setDraftTitle(project.data.title); setDraftDescription(project.data.description ?? ''); setDraftScript(project.data.script); setDraftBoard(project.data.storyboard); setReferences(project.data.referenceCandidates ?? [])
@@ -107,7 +119,11 @@ export default function Studio() {
 
   async function run(label: string, task: () => Promise<void>) {
     setBusy(label); setMessage('')
-    try { await task() } catch (error) { setMessage(error instanceof Error ? error.message : String(error)) }
+    try { await task() } catch (error) {
+      const detail = error instanceof Error ? error.message : String(error)
+      if (detail.includes('Sign in to continue')) { setSessionExpired(true); setMessage('Your session is unavailable. Reload to sign in again.') }
+      else setMessage(detail)
+    }
     finally { setBusy('') }
   }
   async function createWorkspace() { await run('workspace', async () => { const w = await action<WorkspaceRow>('createWorkspace', { name: newWorkspace }); setNewWorkspace(''); setShowWorkspaceForm(false); await loadWorkspaces(); setWorkspaceId(w.recordId) }) }
@@ -142,16 +158,17 @@ export default function Studio() {
   return <div className="is-studio">
     <aside className="is-sidebar">
       <div className="is-brand"><span className="is-brand-mark">I<span>.</span></span><div><strong>ILLUSTORY</strong><small>PRODUCTION STUDIO</small></div></div>
-      <div className="is-sidebar-section"><label>WORKSPACE</label><select value={workspaceId} onChange={e => { setWorkspaceId(e.target.value); setProjectId('') }}><option value="">Select workspace</option>{workspaces.map(w => <option key={w.recordId} value={w.recordId}>{w.data.name}</option>)}</select>{!showWorkspaceForm && <button className="is-quiet" onClick={() => setShowWorkspaceForm(true)}><Plus size={14} /> New workspace</button>}</div>
+      <div className="is-sidebar-section"><label>WORKSPACE</label><select value={workspaceId} onChange={e => { setWorkspaceId(e.target.value); setProjectId(''); setDrawer(null) }}><option value="">Select workspace</option>{workspaces.map(w => <option key={w.recordId} value={w.recordId}>{w.data.name}</option>)}</select>{!showWorkspaceForm && <button className="is-quiet" onClick={() => setShowWorkspaceForm(true)}><Plus size={14} /> New workspace</button>}{workspaceId && role === 'owner' && <button className="is-quiet" onClick={() => setDrawer('members')}><Settings2 size={14} /> Workspace settings</button>}</div>
       {activeWorkspace && <div className="is-role">{role?.toUpperCase()} ACCESS</div>}
+      <button className="is-side-action" onClick={() => setDrawer('activity')}><Activity size={15} /> Activity {activeJobs.length > 0 && <span>{activeJobs.length}</span>}</button>
       <div className="is-sidebar-section"><label>PROJECTS</label><div className="is-project-list">{projects.map(p => <button key={p.recordId} className={projectId === p.recordId ? 'active' : ''} onClick={() => setProjectId(p.recordId)}><Film size={15} />{p.data.title}</button>)}</div></div>
       {workspaceId && canEdit && <div className="is-create"><input placeholder="Project title" value={newTitle} onChange={e => setNewTitle(e.target.value)} /><textarea placeholder="Brief synopsis for visual research" value={newDescription} onChange={e => setNewDescription(e.target.value)} rows={2} /><textarea placeholder="Paste a short script to begin" value={newScript} onChange={e => setNewScript(e.target.value)} rows={4} /><button disabled={!!busy || !newTitle.trim() || !newScript.trim()} onClick={createProject}><Plus size={15} /> Create project</button></div>}
       {showWorkspaceForm && <div className="is-create"><input placeholder="Studio workspace name" value={newWorkspace} onChange={e => setNewWorkspace(e.target.value)} /><button disabled={!!busy || !newWorkspace.trim()} onClick={createWorkspace}><Plus size={15} /> Create workspace</button><button className="is-quiet" onClick={() => { setShowWorkspaceForm(false); setNewWorkspace('') }}>Cancel</button></div>}
-      <div className="is-sidebar-footer">DeepSpace creative workflow · Private GPU execution</div>
     </aside>
     <main className="is-main">
+      {message && <div className="is-main-notice" role="status"><span>{message}</span>{sessionExpired && <button onClick={() => window.location.reload()}>Reload sign-in</button>}<button onClick={() => setMessage('')} aria-label="Dismiss notice"><X size={14} /></button></div>}
       {!project ? <div className="is-welcome"><div className="is-welcome-icon"><Sparkles size={28} /></div><p className="is-kicker">ILLUSTORY / STUDIO</p><h1>From script to finished scene.</h1><p>Choose a project or create one in your workspace. Every generation is a tracked job with a pinned input revision and a reviewable asset version.</p><div className="is-welcome-steps"><span>01 Script</span><span>02 Visual system</span><span>03 Motion</span><span>04 Export</span></div></div> : <>
-        <header className="is-top"><div><button className="is-back" onClick={() => setProjectId('')}><ArrowLeft size={14} /> Projects</button><div className="is-title-line"><h1>{project.data.title}</h1><span>REV {project.data.revision}</span></div></div><div className="is-top-actions"><button onClick={() => loadProject(projectId, true)} title="Reload"><RefreshCw size={17} /></button>{canEdit && <button className="primary" disabled={!dirty || !!busy} onClick={save}><Save size={15} /> Save changes</button>}</div></header>
+        <header className="is-top"><div><button className="is-back" onClick={() => setProjectId('')}><ArrowLeft size={14} /> Projects</button><div className="is-title-line"><h1>{project.data.title}</h1><span>REV {project.data.revision}</span></div></div><div className="is-top-actions"><button onClick={() => setDrawer('activity')}><Activity size={15} /> Activity{activeJobs.length > 0 ? ` (${activeJobs.length})` : ''}</button><button onClick={() => loadProject(projectId, true)} title="Reload"><RefreshCw size={17} /></button>{canEdit && <button className="primary" disabled={!dirty || !!busy} onClick={save}><Save size={15} /> Save changes</button>}</div></header>
         <nav className="is-stage-tabs">{stages.map(s => <button key={s.id} className={stage === s.id ? 'active' : ''} onClick={() => setStage(s.id)}><s.icon size={16} />{s.label}</button>)}</nav>
         <div className="is-content">
           {stage === 'script' && <section className="is-panel">
@@ -202,9 +219,10 @@ export default function Studio() {
         </div>
       </>}
     </main>
-    <aside className="is-activity"><div className="is-activity-head"><div><p className="is-kicker">LIVE OPERATIONS</p><h2>Activity</h2></div><span className="is-live-dot" /></div>{message && <div className="is-notice"><button onClick={() => setMessage('')} aria-label="Dismiss"><X size={14} /></button>{message}</div>}{busy && <div className="is-running"><LoaderCircle className="animate-spin" size={15} /> Processing {busy}…</div>}{project ? <><div className="is-activity-section"><h3>Generation jobs <span>{jobs.length}</span></h3>{[...jobs].reverse().slice(0, 12).map(j => <div className="is-job" key={j.recordId}><div><strong>{j.data.operation}</strong><span className={`is-status ${j.data.status}`}>{j.data.status}</span></div><small>Input rev {j.data.inputRevision} · Output v{j.data.outputVersion || '—'}</small><small>ID {j.recordId.slice(0, 8)} · {Math.round(j.data.progress * 100)}%</small>{j.data.error && <p className="is-job-error">{j.data.error}</p>}{canGenerate && (j.data.status === 'queued' || j.data.status === 'running') && <button className="is-quiet" onClick={() => cancel(j.recordId)}>Cancel</button>}{canGenerate && j.data.status === 'failed' && <button className="is-quiet" onClick={() => generate(j.data.operation, j.data.targetId, j.data.request.options as Record<string, unknown>)}>Retry as new job</button>}</div>)}{!jobs.length && <p className="is-muted">No generation jobs yet.</p>}</div><div className="is-activity-section"><h3>Assets <span>{assets.length}</span></h3><p className="is-muted">{activeJobs.length ? `${activeJobs.length} active request${activeJobs.length === 1 ? '' : 's'}` : 'All jobs settled'}</p></div></> : <div className="is-activity-section"><h3>How it works</h3><p className="is-muted">Edits create a new revision. Generation uses a fixed snapshot. Stale or cancelled jobs cannot become the current asset.</p></div>}
-      {workspaceId && role === 'owner' && <div className="is-activity-section"><h3>Members</h3>{members.map(m => <div className="is-member" key={m.recordId}><span>{m.data.userId === userId ? 'You' : m.data.userId.slice(0, 12)}</span><small>{m.data.role}</small></div>)}<input placeholder="DeepSpace user ID" value={memberId} onChange={e => setMemberId(e.target.value)} /><select value={memberRole} onChange={e => setMemberRole(e.target.value as WorkspaceRole)}>{(['editor','reviewer','viewer','owner'] as WorkspaceRole[]).map(r => <option key={r}>{r}</option>)}</select><button className="is-action full" disabled={!memberId.trim() || !!busy} onClick={() => run('member', async () => { await action('setMemberRole', { workspaceId, userId: memberId, role: memberRole }); setMemberId(''); const r = await action<List<{ userId: string; role: WorkspaceRole; status: string }>>('listMembers', { workspaceId }); setMembers(r.records) })}>Add or update member</button></div>}
-    </aside>
+    {drawer && <><button className="is-drawer-backdrop" aria-label="Close panel" onClick={() => setDrawer(null)} /><aside className="is-drawer" role="dialog" aria-modal="true" aria-label={drawer === 'activity' ? 'Activity' : 'Workspace settings'}><div className="is-drawer-head"><div><p className="is-kicker">{drawer === 'activity' ? 'PROJECT STATUS' : activeWorkspace?.data.name}</p><h2>{drawer === 'activity' ? 'Activity' : 'Workspace settings'}</h2></div><button onClick={() => setDrawer(null)} aria-label="Close panel"><X size={18} /></button></div>
+      {drawer === 'activity' && <>{busy && <div className="is-running"><LoaderCircle className="animate-spin" size={15} /> Processing {busy}…</div>}{project ? <><div className="is-activity-section"><h3>Generation jobs <span>{jobs.length}</span></h3>{[...jobs].reverse().slice(0, 12).map(j => <div className="is-job" key={j.recordId}><div><strong>{j.data.operation}</strong><span className={`is-status ${j.data.status}`}>{j.data.status}</span></div><small>Input rev {j.data.inputRevision} · Output v{j.data.outputVersion || '—'}</small><small>ID {j.recordId.slice(0, 8)} · {Math.round(j.data.progress * 100)}%</small>{j.data.error && <p className="is-job-error">{j.data.error}</p>}{canGenerate && (j.data.status === 'queued' || j.data.status === 'running') && <button className="is-quiet" onClick={() => cancel(j.recordId)}>Cancel</button>}{canGenerate && j.data.status === 'failed' && <button className="is-quiet" onClick={() => generate(j.data.operation, j.data.targetId, j.data.request.options as Record<string, unknown>)}>Retry as new job</button>}</div>)}{!jobs.length && <p className="is-muted">No generation jobs yet.</p>}</div><div className="is-activity-section"><h3>Assets <span>{assets.length}</span></h3><p className="is-muted">{activeJobs.length ? `${activeJobs.length} active request${activeJobs.length === 1 ? '' : 's'}` : 'All jobs settled'}</p></div></> : <div className="is-activity-section"><h3>Choose a project</h3><p className="is-muted">Project jobs and asset versions appear here.</p></div>}</>}
+      {drawer === 'members' && workspaceId && role === 'owner' && <div className="is-activity-section"><h3>Members <span>{members.length}</span></h3><p className="is-muted">Members can access this workspace according to their role. Only an owner can change roles.</p>{members.map(m => <div className="is-member" key={m.recordId}><span>{m.data.userId === userId ? 'You' : m.data.userId.slice(0, 12)}</span><small>{m.data.role}</small></div>)}<label className="is-field-label">DEEPSPACE USER ID</label><input placeholder="DeepSpace user ID" value={memberId} onChange={e => setMemberId(e.target.value)} /><label className="is-field-label">ROLE</label><select value={memberRole} onChange={e => setMemberRole(e.target.value as WorkspaceRole)}>{(['editor','reviewer','viewer','owner'] as WorkspaceRole[]).map(r => <option key={r}>{r}</option>)}</select><button className="is-action full" disabled={!memberId.trim() || !!busy} onClick={() => run('member', async () => { await action('setMemberRole', { workspaceId, userId: memberId, role: memberRole }); setMemberId(''); const r = await action<List<{ userId: string; role: WorkspaceRole; status: string }>>('listMembers', { workspaceId }); setMembers(r.records) })}>Add or update member</button></div>}
+    </aside></>}
   </div>
 }
 

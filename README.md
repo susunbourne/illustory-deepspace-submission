@@ -4,6 +4,8 @@ An authenticated, workspace-scoped production control plane for one short-video 
 
 **Current status:** this checkout is registered under the intended DeepSpace account and runs locally. Authenticated browser tests created workspaces, projects and editable storyboard records, verified refresh persistence, and exercised all four workspace roles. The app has **not** been deployed or connected to a paid private engine; no generated video is claimed as a verified result. The GPU workflow engine is a separate private service that is **not included** in this review repository.
 
+The Studio keeps project editing in the main column. Project jobs and asset counts open from **Activity**; owner-only membership controls open from **Workspace settings** beside the workspace selector. These panels stay off the bottom of laptop-width pages.
+
 ## Why this split
 
 DeepSpace owns sign-in, the app Worker, persistent workspace/project/job/asset metadata through RecordRoom, a durable JobRoom, and four useful Catalog integrations. OpenAI parses the script and generates character/scene references. ElevenLabs supplies selectable voices and speech audio. YouTube provides three optional visual references from the title and synopsis. Email can notify the active workspace owner after a successful export, even when a reviewer requested it. The original private Illustory service performs reference-conditioned shot first frames, Vast/ComfyUI H3, optional SeedVR2, private binary storage, and FFmpeg. The browser never receives the private service token.

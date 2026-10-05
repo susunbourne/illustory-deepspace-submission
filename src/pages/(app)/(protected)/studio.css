@@ -9,3 +9,20 @@
 .is-shot-characters small{width:100%}.is-shot-characters label{display:flex;align-items:center;gap:5px;cursor:pointer}.is-shot-characters input,.is-email-settings input{width:auto;accent-color:#a8d7f4}
 .is-email-settings label{display:flex;align-items:center;gap:8px;font-size:12px;color:#cfe2ef}.is-email-settings small{line-height:1.4}
 .is-shot-content>label:has(textarea),.is-shot-content>label:has(select){display:grid;gap:6px;align-items:initial}.is-shot-content>label:has(textarea) textarea,.is-shot-content>label:has(select) select{width:100%}
+
+/* Project status and workspace administration are opened on demand instead of
+   becoming a third grid row beneath the editor on laptop-width screens. */
+.is-studio{grid-template-columns:258px minmax(0,1fr)}
+.is-side-action{display:flex;align-items:center;gap:9px;width:100%;padding:10px 9px;border:1px solid #324454;border-radius:7px;background:#172430;color:#bed8e9;text-align:left;font-size:12px;font-weight:600}
+.is-side-action span{margin-left:auto;padding:2px 6px;border-radius:10px;background:#29445a;color:#e1f1fb}
+.is-main-notice{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 36px;background:#263848;border-bottom:1px solid #54748d;color:#d1e7f5;font-size:12px;line-height:1.4}
+.is-main-notice button,.is-drawer-head button{display:grid;place-items:center;border:0;background:transparent;color:#b8cad8;padding:3px}
+.is-main-notice button:not([aria-label]){margin-left:auto;padding:6px 9px;border:1px solid #7895aa;border-radius:5px;white-space:nowrap;font-size:11px}
+.is-drawer-backdrop{position:fixed;inset:0;z-index:40;border:0;background:rgba(3,8,13,.65)}
+.is-drawer{position:fixed;right:0;top:0;bottom:0;z-index:41;width:min(380px,100vw);padding:25px 20px;display:flex;flex-direction:column;gap:22px;overflow-y:auto;background:#10151c;border-left:1px solid #344250;box-shadow:-18px 0 45px #0008}
+.is-drawer-head{display:flex;align-items:flex-start;justify-content:space-between;gap:15px;padding-bottom:17px;border-bottom:1px solid #2a3540}
+.is-drawer-head h2{margin-top:6px;font-size:20px}
+.is-drawer .is-field-label{margin-bottom:-5px}
+.is-drawer .is-activity-section{border-top:0;padding-top:0}
+@media(max-width:1200px){.is-studio{grid-template-columns:225px minmax(0,1fr)}}
+@media(max-width:750px){.is-studio{display:block}.is-sidebar{min-height:auto}.is-top{align-items:flex-start;flex-direction:column}.is-main-notice{padding:11px 18px}}

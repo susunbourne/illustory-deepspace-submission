@@ -18,7 +18,7 @@ The original Git root had 136 pre-existing status entries at the start and still
 | DeepSpace Catalog integrations | `src/illustory/creative.ts`, `src/illustory/catalog.ts`, `src/integrations.ts` | OpenAI parse/images, ElevenLabs voices/speech, YouTube research, Email export notice wired; offline checks only |
 | Private media proxy and access check | `src/server/illustory-routes.ts` | Code and private range contract tested |
 | Existing-engine bridge | Private adapter `bridge.py` outside repo | Auth/idempotency/restart/path tests pass; model/GPU path unverified |
-| Reviewer-facing UI | `studio.tsx`, `studio.css`, `src/pages/index.tsx` | Build and browser smoke passed; owner review pending |
+| Reviewer-facing UI | `studio.tsx`, `studio.css`, `src/pages/index.tsx` | Build and browser smoke passed; owner identified a narrow-layout issue, now corrected and role-browser tested; full stage review pending |
 
 Commands and observed results:
 
