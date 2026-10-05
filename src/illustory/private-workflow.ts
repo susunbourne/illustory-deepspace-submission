@@ -1,5 +1,6 @@
 import type { Env } from '../../worker'
 import type { WorkflowJob, Storyboard } from './types'
+import { dataUriToBytes, sha256 } from './catalog'
 
 export interface PrivateResult {
   storyboard?: Storyboard
@@ -51,4 +52,23 @@ export async function verifyPrivateAsset(env: Env, asset: { storageKey: string; 
   const response = await request(env, `/v1/assets/${encodeURIComponent(asset.storageKey)}`, { method: 'HEAD', signal: AbortSignal.any([signal, AbortSignal.timeout(30_000)]) })
   if (response.headers.get('X-Content-Sha256')?.toLowerCase() !== asset.sha256.toLowerCase()
     || Number(response.headers.get('Content-Length')) !== asset.byteSize) throw new Error('Private asset integrity check failed')
+}
+
+/** Catalog-generated media is copied into private workspace media storage.
+ * It never enters the public app file scope or the review repository.
+ */
+export async function storeCatalogAsset(env: Env, jobId: string, projectId: string, dataUri: string, signal: AbortSignal): Promise<NonNullable<PrivateResult['asset']>> {
+  const { bytes, mimeType } = dataUriToBytes(dataUri)
+  const digest = await sha256(bytes)
+  const response = await request(env, `/v1/catalog-assets/${encodeURIComponent(jobId)}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': mimeType, 'X-Project-Id': projectId, 'X-Content-Sha256': digest },
+    body: bytes,
+    signal: AbortSignal.any([signal, AbortSignal.timeout(60_000)]),
+  })
+  const asset = await response.json() as PrivateResult['asset']
+  if (!asset || asset.sha256 !== digest || asset.byteSize !== bytes.length || asset.mimeType !== mimeType || !asset.storageKey) {
+    throw new Error('Private media store returned inconsistent asset metadata')
+  }
+  return asset
 }

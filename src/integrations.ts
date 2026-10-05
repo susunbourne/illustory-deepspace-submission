@@ -16,4 +16,8 @@
  */
 
 export const integrations: Record<string, { billing: 'developer' | 'user' }> = {
+  openai: { billing: 'developer' },
+  elevenlabs: { billing: 'developer' },
+  youtube: { billing: 'developer' },
+  email: { billing: 'developer' },
 }

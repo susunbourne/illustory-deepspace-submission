@@ -64,8 +64,8 @@ function reassertAppIdentity(headers: Headers, env: Env): void {
 
 /** Register auth, debug, and integration routes in their required order. */
 export function registerAuthAndIntegrationRoutes(app: Hono<AppContext>): void {
-  // No catalog integration is part of this product. Block the scaffold's
-  // generic developer-billed integration proxy before its catch-all routes.
+  // Catalog calls go through role-checked server actions and background jobs.
+  // Block the scaffold's generic browser-facing developer-billed proxy.
   app.all('/api/integrations', () => new Response('Not found', { status: 404 }))
   app.all('/api/integrations/*', () => new Response('Not found', { status: 404 }))
   const nativeAuthOptions = (env: Env): ExpoAuthBridgeOptions => ({

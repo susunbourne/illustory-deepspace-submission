@@ -3,7 +3,7 @@ import { useAuth } from 'deepspace'
 import { ArrowLeft, Clapperboard, Film, Image as ImageIcon, Layers, LoaderCircle, Plus, RefreshCw, Save, Sparkles, Users, X } from 'lucide-react'
 import { action, assetObjectUrl } from '../../../illustory/client'
 import { assetSlot, emptyStoryboard } from '../../../illustory/types'
-import type { Asset, Character, Operation, Project, Row, Scene, Shot, Storyboard, WorkflowJob, Workspace, WorkspaceRole } from '../../../illustory/types'
+import type { Asset, Character, Operation, Project, Row, Scene, Shot, Storyboard, VideoReference, WorkflowJob, Workspace, WorkspaceRole } from '../../../illustory/types'
 import './studio.css'
 
 type WorkspaceRow = Row<Workspace> & { role: WorkspaceRole }
@@ -30,6 +30,7 @@ function Media({ asset, label }: { asset?: Row<Asset>; label: string }) {
   if (!asset) return <div className="is-media-empty"><ImageIcon size={22} /><span>{label}</span></div>
   if (error) return <div className="is-media-empty">{error}</div>
   if (!url) return <div className="is-media-empty"><LoaderCircle className="animate-spin" size={18} /> Loading asset…</div>
+  if (asset.data.mimeType.startsWith('audio/')) return <div className="is-audio"><strong>{label}</strong><audio src={url} controls /></div>
   return asset.data.mimeType.startsWith('video/')
     ? <video className="is-media" src={url} controls playsInline />
     : <img className="is-media" src={url} alt={label} />
@@ -47,12 +48,17 @@ export default function Studio() {
   const [members, setMembers] = useState<Row<{ userId: string; role: WorkspaceRole; status: string }>[]>([])
   const [stage, setStage] = useState<Stage>('script')
   const [draftTitle, setDraftTitle] = useState('')
+  const [draftDescription, setDraftDescription] = useState('')
   const [draftScript, setDraftScript] = useState('')
   const [draftBoard, setDraftBoard] = useState<Storyboard>(emptyStoryboard())
   const [dirty, setDirty] = useState(false)
   const [newWorkspace, setNewWorkspace] = useState('')
   const [newTitle, setNewTitle] = useState('')
+  const [newDescription, setNewDescription] = useState('')
   const [newScript, setNewScript] = useState('')
+  const [voiceChoices, setVoiceChoices] = useState<Array<{ id: string; name: string; previewUrl: string }>>([])
+  const [voiceDrafts, setVoiceDrafts] = useState<Record<string, string>>({})
+  const [references, setReferences] = useState<VideoReference[]>([])
   const [memberId, setMemberId] = useState('')
   const [memberRole, setMemberRole] = useState<WorkspaceRole>('viewer')
   const [busy, setBusy] = useState('')
@@ -81,7 +87,7 @@ export default function Studio() {
       action<Row<Project>>('getProject', { projectId: id }), action<List<Asset>>('listAssets', { projectId: id }), action<List<WorkflowJob>>('listJobs', { projectId: id }),
     ])
     setProject(p); setAssets(a.records); setJobs(j.records)
-    if (syncDraft) { setDraftTitle(p.data.title); setDraftScript(p.data.script); setDraftBoard(p.data.storyboard); setDirty(false) }
+    if (syncDraft) { setDraftTitle(p.data.title); setDraftDescription(p.data.description ?? ''); setDraftScript(p.data.script); setDraftBoard(p.data.storyboard); setReferences(p.data.referenceCandidates ?? []); setDirty(false) }
     return p
   }, [])
 
@@ -95,7 +101,7 @@ export default function Studio() {
   }, [projectId, loadProject])
   useEffect(() => {
     if (!project || dirty) return
-    setDraftTitle(project.data.title); setDraftScript(project.data.script); setDraftBoard(project.data.storyboard)
+    setDraftTitle(project.data.title); setDraftDescription(project.data.description ?? ''); setDraftScript(project.data.script); setDraftBoard(project.data.storyboard); setReferences(project.data.referenceCandidates ?? [])
   }, [project?.data.revision, project?.recordId, dirty])
 
   async function run(label: string, task: () => Promise<void>) {
@@ -104,12 +110,13 @@ export default function Studio() {
     finally { setBusy('') }
   }
   async function createWorkspace() { await run('workspace', async () => { const w = await action<WorkspaceRow>('createWorkspace', { name: newWorkspace }); setNewWorkspace(''); await loadWorkspaces(); setWorkspaceId(w.recordId) }) }
-  async function createProject() { await run('project', async () => { const p = await action<Row<Project>>('createProject', { workspaceId, title: newTitle, script: newScript }); setNewTitle(''); setNewScript(''); await loadProjects(workspaceId); setProjectId(p.recordId) }) }
+  async function createProject() { await run('project', async () => { const p = await action<Row<Project>>('createProject', { workspaceId, title: newTitle, description: newDescription, script: newScript }); setNewTitle(''); setNewDescription(''); setNewScript(''); await loadProjects(workspaceId); setProjectId(p.recordId) }) }
   async function save() {
     if (!project) return
     await run('save', async () => {
-      const p = await action<Row<Project>>('saveProject', { projectId, expectedRevision: project.data.revision, title: draftTitle, script: draftScript, storyboard: draftBoard })
-      setProject(p); setDirty(false); setMessage('Saved revision ' + p.data.revision)
+      const p = await action<Row<Project>>('saveProject', { projectId, expectedRevision: project.data.revision, title: draftTitle, description: draftDescription, script: draftScript, storyboard: draftBoard })
+      const selectionInvalidated = Object.keys(project.data.currentAssets).length > 0 && Object.keys(p.data.currentAssets).length === 0
+      setProject(p); setDirty(false); setMessage(`Saved revision ${p.data.revision}${selectionInvalidated ? '. Creative changes cleared selected media; prior versions remain available.' : ''}`)
     })
   }
   async function generate(operation: Operation, targetId: string, options?: Record<string, unknown>) {
@@ -123,6 +130,9 @@ export default function Studio() {
     await run('select', async () => { await action('selectAsset', { projectId, assetId }); await loadProject(projectId, true) })
   }
   async function cancel(jobId: string) { await run('cancel', async () => { await action('cancelJob', { jobId }); await loadProject(projectId) }) }
+  async function loadVoices() { await run('voices', async () => { setVoiceChoices(await action('listVoices', { projectId })); setMessage('Voice catalog loaded. Choose a voice for a character, then save.') }) }
+  async function findReferences() { await run('references', async () => { setReferences(await action('searchReferences', { projectId })) }) }
+  async function setExportNotice(enabled: boolean) { if (!project) return; await run('notification', async () => { const p = await action<Row<Project>>('setExportNotification', { projectId, enabled }); setProject(p) }) }
   function editBoard(board: Storyboard) { setDraftBoard(board); setDirty(true) }
   function changeCharacter(id: string, patch: Partial<Character>) { editBoard({ ...draftBoard, characters: draftBoard.characters.map(c => c.id === id ? { ...c, ...patch } : c) }) }
   function changeScene(id: string, patch: Partial<Scene>) { editBoard({ ...draftBoard, scenes: draftBoard.scenes.map(s => s.id === id ? { ...s, ...patch } : s) }) }
@@ -134,19 +144,59 @@ export default function Studio() {
       <div className="is-sidebar-section"><label>WORKSPACE</label><select value={workspaceId} onChange={e => { setWorkspaceId(e.target.value); setProjectId('') }}><option value="">Select workspace</option>{workspaces.map(w => <option key={w.recordId} value={w.recordId}>{w.data.name}</option>)}</select></div>
       {activeWorkspace && <div className="is-role">{role?.toUpperCase()} ACCESS</div>}
       <div className="is-sidebar-section"><label>PROJECTS</label><div className="is-project-list">{projects.map(p => <button key={p.recordId} className={projectId === p.recordId ? 'active' : ''} onClick={() => setProjectId(p.recordId)}><Film size={15} />{p.data.title}</button>)}</div></div>
-      {workspaceId && canEdit && <div className="is-create"><input placeholder="Project title" value={newTitle} onChange={e => setNewTitle(e.target.value)} /><textarea placeholder="Paste a short script to begin" value={newScript} onChange={e => setNewScript(e.target.value)} rows={4} /><button disabled={!!busy || !newTitle.trim() || !newScript.trim()} onClick={createProject}><Plus size={15} /> Create project</button></div>}
+      {workspaceId && canEdit && <div className="is-create"><input placeholder="Project title" value={newTitle} onChange={e => setNewTitle(e.target.value)} /><textarea placeholder="Brief synopsis for visual research" value={newDescription} onChange={e => setNewDescription(e.target.value)} rows={2} /><textarea placeholder="Paste a short script to begin" value={newScript} onChange={e => setNewScript(e.target.value)} rows={4} /><button disabled={!!busy || !newTitle.trim() || !newScript.trim()} onClick={createProject}><Plus size={15} /> Create project</button></div>}
       {!workspaceId && <div className="is-create"><input placeholder="Studio workspace name" value={newWorkspace} onChange={e => setNewWorkspace(e.target.value)} /><button disabled={!!busy || !newWorkspace.trim()} onClick={createWorkspace}><Plus size={15} /> Create workspace</button></div>}
-      <div className="is-sidebar-footer">Private execution engine · DeepSpace control plane</div>
+      <div className="is-sidebar-footer">DeepSpace creative workflow · Private GPU execution</div>
     </aside>
     <main className="is-main">
       {!project ? <div className="is-welcome"><div className="is-welcome-icon"><Sparkles size={28} /></div><p className="is-kicker">ILLUSTORY / STUDIO</p><h1>From script to finished scene.</h1><p>Choose a project or create one in your workspace. Every generation is a tracked job with a pinned input revision and a reviewable asset version.</p><div className="is-welcome-steps"><span>01 Script</span><span>02 Visual system</span><span>03 Motion</span><span>04 Export</span></div></div> : <>
         <header className="is-top"><div><button className="is-back" onClick={() => setProjectId('')}><ArrowLeft size={14} /> Projects</button><div className="is-title-line"><h1>{project.data.title}</h1><span>REV {project.data.revision}</span></div></div><div className="is-top-actions"><button onClick={() => loadProject(projectId, true)} title="Reload"><RefreshCw size={17} /></button>{canEdit && <button className="primary" disabled={!dirty || !!busy} onClick={save}><Save size={15} /> Save changes</button>}</div></header>
         <nav className="is-stage-tabs">{stages.map(s => <button key={s.id} className={stage === s.id ? 'active' : ''} onClick={() => setStage(s.id)}><s.icon size={16} />{s.label}</button>)}</nav>
         <div className="is-content">
-          {stage === 'script' && <section className="is-panel"><div className="is-section-heading"><div><p className="is-kicker">01 / SOURCE</p><h2>Script & storyboard</h2></div>{canGenerate && <button className="is-action" disabled={!!busy || dirty} onClick={() => generate('parse', projectId)}><Sparkles size={15} /> Parse script</button>}</div><p className="is-help">Parsing runs in the private workflow service. Review and edit the resulting structure before generating assets.</p><label className="is-field-label">PROJECT TITLE</label><input value={draftTitle} disabled={!canEdit} onChange={e => { setDraftTitle(e.target.value); setDirty(true) }} /><label className="is-field-label">SCRIPT</label><textarea className="is-script" value={draftScript} disabled={!canEdit} onChange={e => { setDraftScript(e.target.value); setDirty(true) }} placeholder="Paste your screenplay or scene draft" /><div className="is-stat-row"><div><strong>{draftBoard.characters.length}</strong><span>Characters</span></div><div><strong>{draftBoard.scenes.length}</strong><span>Scenes</span></div><div><strong>{draftBoard.scenes.reduce((n,s) => n+s.shots.length,0)}</strong><span>Shots</span></div></div></section>}
-          {stage === 'cast' && <section className="is-panel"><div className="is-section-heading"><div><p className="is-kicker">02 / PEOPLE</p><h2>Cast</h2></div>{canEdit && <button className="is-action" onClick={() => editBoard({ ...draftBoard, characters: [...draftBoard.characters, { id: newId(), name: 'New character', description: '' }] })}><Plus size={15} /> Add character</button>}</div><div className="is-card-grid">{draftBoard.characters.map(c => <article className="is-card" key={c.id}><Media asset={currentAsset('character', c.id)} label="Character reference" /><div className="is-card-body"><input value={c.name} disabled={!canEdit} onChange={e => changeCharacter(c.id, { name: e.target.value })} /><textarea value={c.description} disabled={!canEdit} onChange={e => changeCharacter(c.id, { description: e.target.value })} placeholder="Appearance and personality" rows={3} /><VersionPicker assets={assets} operation="character" targetId={c.id} currentId={project.data.currentAssets[assetSlot('character', c.id)]} onSelect={selectAsset} canReview={canReview} />{canGenerate && <button className="is-action full" disabled={!!busy || dirty} onClick={() => generate('character', c.id)}><Sparkles size={14} /> Generate reference</button>}</div></article>)}</div>{!draftBoard.characters.length && <Empty text="Parse a script or add your first character." />}</section>}
+          {stage === 'script' && <section className="is-panel">
+            <div className="is-section-heading"><div><p className="is-kicker">01 / SOURCE</p><h2>Script & storyboard</h2></div>{canGenerate && <button className="is-action" disabled={!!busy || dirty} onClick={() => generate('parse', projectId)}><Sparkles size={15} /> Parse script</button>}</div>
+            <p className="is-help">OpenAI converts a screenplay of up to 20,000 characters into editable film production data. Review every shot before generating media.</p>
+            <label className="is-field-label">PROJECT TITLE</label><input value={draftTitle} disabled={!canEdit} onChange={e => { setDraftTitle(e.target.value); setDirty(true) }} />
+            <label className="is-field-label">SYNOPSIS</label><textarea value={draftDescription} disabled={!canEdit} onChange={e => { setDraftDescription(e.target.value); setDirty(true) }} rows={2} placeholder="Used with the title for optional visual reference search" />
+            <label className="is-field-label">SCRIPT</label><textarea className="is-script" value={draftScript} disabled={!canEdit} onChange={e => { setDraftScript(e.target.value); setDirty(true) }} placeholder="Paste your screenplay or scene draft" />
+            <div className="is-stat-row"><div><strong>{draftBoard.characters.length}</strong><span>Characters</span></div><div><strong>{draftBoard.scenes.length}</strong><span>Scenes</span></div><div><strong>{draftBoard.scenes.reduce((n,s) => n+s.shots.length,0)}</strong><span>Shots</span></div></div>
+            {canGenerate && <button className="is-action" disabled={!!busy || dirty} onClick={findReferences}>Find YouTube visual references</button>}
+            {!!references.length && <div className="is-references"><h3>Reference research</h3><p className="is-help">Open a result to review it, then attach its link to a shot in the Shots tab. Search metadata is never treated as generated footage.</p>{references.map(ref => <a key={ref.url} href={ref.url} target="_blank" rel="noreferrer">{ref.title}</a>)}</div>}
+          </section>}
+          {stage === 'cast' && <section className="is-panel"><div className="is-section-heading"><div><p className="is-kicker">02 / PEOPLE</p><h2>Cast</h2></div>{canEdit && <button className="is-action" onClick={() => editBoard({ ...draftBoard, characters: [...draftBoard.characters, { id: newId(), name: 'New character', description: '' }] })}><Plus size={15} /> Add character</button>}</div>
+            {canGenerate && <button className="is-action" disabled={!!busy} onClick={loadVoices}>Load ElevenLabs voices</button>}
+            <div className="is-card-grid">{draftBoard.characters.map(c => <article className="is-card" key={c.id}>
+              <Media asset={currentAsset('character', c.id)} label="Character reference" />
+              <div className="is-card-body"><input value={c.name} disabled={!canEdit} onChange={e => changeCharacter(c.id, { name: e.target.value })} /><textarea value={c.description} disabled={!canEdit} onChange={e => changeCharacter(c.id, { description: e.target.value })} placeholder="Appearance and personality" rows={3} />
+                <VersionPicker assets={assets} operation="character" targetId={c.id} currentId={project.data.currentAssets[assetSlot('character', c.id)]} onSelect={selectAsset} canReview={canReview} />
+                {canGenerate && <button className="is-action full" disabled={!!busy || dirty} onClick={() => generate('character', c.id)}><Sparkles size={14} /> Generate reference</button>}
+                <label className="is-field-label">VOICE</label>
+                <select value={c.voiceId ?? ''} disabled={!canEdit} onChange={e => changeCharacter(c.id, { voiceId: e.target.value })}><option value="">Select a catalog voice</option>{voiceChoices.map(v => <option value={v.id} key={v.id}>{v.name}</option>)}</select>
+                {voiceChoices.find(v => v.id === c.voiceId)?.previewUrl && <a href={voiceChoices.find(v => v.id === c.voiceId)?.previewUrl} target="_blank" rel="noreferrer">Preview selected voice</a>}
+                <textarea rows={2} maxLength={240} placeholder="A short line (up to 240 characters) for this shot's voice" value={voiceDrafts[c.id] ?? ''} onChange={e => setVoiceDrafts(previous => ({ ...previous, [c.id]: e.target.value }))} />
+                {canGenerate && <button className="is-action full" disabled={!!busy || dirty || !c.voiceId || !voiceDrafts[c.id]?.trim()} onClick={() => generate('voice', c.id, { text: voiceDrafts[c.id] })}>Generate voice reference</button>}
+                <Media asset={currentAsset('voice', c.id)} label="Selected voice reference" />
+                <VersionPicker assets={assets} operation="voice" targetId={c.id} currentId={project.data.currentAssets[assetSlot('voice', c.id)]} onSelect={selectAsset} canReview={canReview} />
+              </div>
+            </article>)}</div>{!draftBoard.characters.length && <Empty text="Parse a script or add your first character." />}</section>}
           {stage === 'scenes' && <section className="is-panel"><div className="is-section-heading"><div><p className="is-kicker">03 / WORLD</p><h2>Scene anchors</h2></div>{canEdit && <button className="is-action" onClick={() => editBoard({ ...draftBoard, scenes: [...draftBoard.scenes, { id: newId(), title: 'New scene', description: '', shots: [] }] })}><Plus size={15} /> Add scene</button>}</div><div className="is-card-grid">{draftBoard.scenes.map(s => <article className="is-card" key={s.id}><Media asset={currentAsset('scene-anchor', s.id)} label="Scene anchor" /><div className="is-card-body"><input value={s.title} disabled={!canEdit} onChange={e => changeScene(s.id, { title: e.target.value })} /><textarea value={s.description} disabled={!canEdit} onChange={e => changeScene(s.id, { description: e.target.value })} placeholder="Location and visual continuity" rows={3} /><small>{s.shots.length} shots</small><VersionPicker assets={assets} operation="scene-anchor" targetId={s.id} currentId={project.data.currentAssets[assetSlot('scene-anchor', s.id)]} onSelect={selectAsset} canReview={canReview} />{canGenerate && <button className="is-action full" disabled={!!busy || dirty} onClick={() => generate('scene-anchor', s.id)}><Sparkles size={14} /> Generate anchor</button>}</div></article>)}</div>{!draftBoard.scenes.length && <Empty text="Parse a script or add a scene to start visual development." />}</section>}
-          {stage === 'shots' && <section className="is-panel"><div className="is-section-heading"><div><p className="is-kicker">04 / CAMERA</p><h2>Shots</h2></div></div>{draftBoard.scenes.map(s => <div key={s.id} className="is-scene-group"><div className="is-group-heading"><h3>{s.title}</h3>{canEdit && <button className="is-quiet" onClick={() => changeScene(s.id, { shots: [...s.shots, { id: newId(), title: `Shot ${s.shots.length + 1}`, description: '', durationSeconds: 5 }] })}><Plus size={14} /> Add shot</button>}</div>{s.shots.map(q => <article className="is-shot" key={q.id}><div className="is-shot-media"><Media asset={currentAsset('first-frame', q.id)} label="First frame" /></div><div className="is-shot-content"><input value={q.title} disabled={!canEdit} onChange={e => changeShot(s.id, q.id, { title: e.target.value })} /><textarea value={q.description} disabled={!canEdit} onChange={e => changeShot(s.id, q.id, { description: e.target.value })} placeholder="Action, camera movement, composition" rows={3} /><label>Duration <input type="number" min="3" max="15" value={q.durationSeconds} disabled={!canEdit} onChange={e => changeShot(s.id, q.id, { durationSeconds: Number(e.target.value) })} /> seconds</label><VersionPicker assets={assets} operation="first-frame" targetId={q.id} currentId={project.data.currentAssets[assetSlot('first-frame', q.id)]} onSelect={selectAsset} canReview={canReview} />{canGenerate && <button className="is-action" disabled={!!busy || dirty} onClick={() => generate('first-frame', q.id)}><Sparkles size={14} /> Generate first frame</button>}</div></article>)}</div>)}{!draftBoard.scenes.length && <Empty text="Create a scene before adding shots." />}</section>}
+          {stage === 'shots' && <section className="is-panel"><div className="is-section-heading"><div><p className="is-kicker">04 / CAMERA</p><h2>Shots</h2></div></div>{draftBoard.scenes.map(s => <div key={s.id} className="is-scene-group"><div className="is-group-heading"><h3>{s.title}</h3>{canEdit && <button className="is-quiet" onClick={() => changeScene(s.id, { shots: [...s.shots, { id: newId(), title: `Shot ${s.shots.length + 1}`, description: '', durationSeconds: 5 }] })}><Plus size={14} /> Add shot</button>}</div>
+            {s.shots.map(q => <article className="is-shot" key={q.id}><div className="is-shot-media"><Media asset={currentAsset('first-frame', q.id)} label="First frame" /></div><div className="is-shot-content">
+              <input value={q.title} disabled={!canEdit} onChange={e => changeShot(s.id, q.id, { title: e.target.value })} />
+              <textarea value={q.description} disabled={!canEdit} onChange={e => changeShot(s.id, q.id, { description: e.target.value })} placeholder="Action and composition" rows={3} />
+              <label>Duration <input type="number" min="4" max="15" value={q.durationSeconds} disabled={!canEdit} onChange={e => changeShot(s.id, q.id, { durationSeconds: Number(e.target.value), beats: undefined })} /> seconds</label>
+              <label>Shot type <input value={q.shotType ?? ''} disabled={!canEdit} onChange={e => changeShot(s.id, q.id, { shotType: e.target.value })} placeholder="close-up, wide..." /></label>
+              <label>Camera angle <input value={q.cameraAngle ?? ''} disabled={!canEdit} onChange={e => changeShot(s.id, q.id, { cameraAngle: e.target.value })} /></label>
+              <label>Dialogue <textarea value={q.dialogue ?? ''} disabled={!canEdit} onChange={e => changeShot(s.id, q.id, { dialogue: e.target.value })} rows={2} /></label>
+              <div className="is-shot-characters"><small>Characters in shot</small>{draftBoard.characters.map(c => <label key={c.id}><input type="checkbox" disabled={!canEdit} checked={q.characters?.includes(c.id) ?? false} onChange={e => changeShot(s.id, q.id, { characters: e.target.checked ? [...(q.characters ?? []), c.id] : (q.characters ?? []).filter(id => id !== c.id) })} />{c.name}</label>)}</div>
+              {!!references.length && <label>Visual reference <select value={q.referenceVideo?.url ?? ''} disabled={!canEdit} onChange={e => { const ref = references.find(r => r.url === e.target.value); changeShot(s.id, q.id, { referenceVideo: ref ? { title: ref.title, url: ref.url } : undefined }) }}><option value="">None</option>{references.map(ref => <option key={ref.url} value={ref.url}>{ref.title}</option>)}</select></label>}
+              {q.referenceVideo && <a href={q.referenceVideo.url} target="_blank" rel="noreferrer">Open selected reference</a>}
+              {!!q.beats?.length && <small>{q.beats.length} motion beat{q.beats.length === 1 ? '' : 's'} · {q.beats.map(b => b.description).join(' / ')}</small>}
+              <VersionPicker assets={assets} operation="first-frame" targetId={q.id} currentId={project.data.currentAssets[assetSlot('first-frame', q.id)]} onSelect={selectAsset} canReview={canReview} />
+              {canGenerate && <button className="is-action" disabled={!!busy || dirty} onClick={() => generate('first-frame', q.id)}><Sparkles size={14} /> Generate first frame</button>}
+            </div></article>)}
+          </div>)}{!draftBoard.scenes.length && <Empty text="Create a scene before adding shots." />}</section>}
+          {stage === 'edit' && <div className="is-email-settings"><label><input type="checkbox" checked={!!project.data.notifyOnExport} disabled={!canEdit || !!busy || dirty} onChange={e => setExportNotice(e.target.checked)} /> Email me when export completes</label><p className="is-help">Optional DeepSpace Email notification goes to the signed-in user's address. Export still succeeds if mail delivery fails.</p>{jobs.filter(j => j.data.operation === 'export' && j.data.notificationStatus && j.data.notificationStatus !== 'none').map(j => <small key={j.recordId}>Export {j.recordId.slice(0, 8)} · email {j.data.notificationStatus}{j.data.notificationError ? ` · ${j.data.notificationError}` : ''}</small>)}</div>}
           {stage === 'edit' && <section className="is-panel"><div className="is-section-heading"><div><p className="is-kicker">05 / DELIVERY</p><h2>Edit & export</h2></div>{canReview && <button className="is-action" disabled={!!busy || dirty} onClick={() => generate('export', projectId)}><Film size={15} /> Export film</button>}</div><p className="is-help">Choose a video version for each shot, set trims, save the edit, then request a private FFmpeg export.</p>{draftBoard.scenes.flatMap(s => s.shots.map(q => <article className="is-edit-shot" key={q.id}><div className="is-edit-preview"><Media asset={currentAsset('seedvr2', q.id) ?? currentAsset('h3', q.id)} label="Video not generated" /></div><div className="is-edit-controls"><h3>{s.title} / {q.title}</h3><p>{q.description}</p><div className="is-inline-actions">{canGenerate && <><button disabled={!!busy || dirty || !currentAsset('first-frame', q.id)} onClick={() => generate('h3', q.id)}><Sparkles size={14} /> Generate H3</button><button disabled={!!busy || dirty || !currentAsset('h3', q.id)} onClick={() => generate('seedvr2', q.id)}><Sparkles size={14} /> Enhance</button></>}</div><VersionPicker assets={assets} operation="h3" targetId={q.id} currentId={project.data.currentAssets[assetSlot('h3', q.id)]} onSelect={selectAsset} canReview={canReview} /><VersionPicker assets={assets} operation="seedvr2" targetId={q.id} currentId={project.data.currentAssets[assetSlot('seedvr2', q.id)]} onSelect={selectAsset} canReview={canReview} /><div className="is-trim"><label>Start trim <input type="number" min="0" step="0.1" value={q.trimStartSeconds ?? 0} disabled={!canEdit} onChange={e => changeShot(s.id, q.id, { trimStartSeconds: Number(e.target.value) })} /> s</label><label>End trim <input type="number" min="0" step="0.1" value={q.trimEndSeconds ?? 0} disabled={!canEdit} onChange={e => changeShot(s.id, q.id, { trimEndSeconds: Number(e.target.value) })} /> s</label></div></div></article>))}<div className="is-export"><h3>Final export</h3><Media asset={currentAsset('export', projectId)} label="No export yet" /><VersionPicker assets={assets} operation="export" targetId={projectId} currentId={project.data.currentAssets[assetSlot('export', projectId)]} onSelect={selectAsset} canReview={canReview} /></div></section>}
         </div>
       </>}

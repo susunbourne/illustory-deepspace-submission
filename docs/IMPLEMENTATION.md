@@ -14,30 +14,33 @@ Browser
   └─ protected Studio → server actions (Bearer JWT)
        ├─ membership check on every workspace/project/asset operation
        ├─ DeepSpace RecordRoom: workspaces, memberships, projects, jobs, assets
-       └─ DeepSpace JobRoom: durable orchestration, checkpoints and retries
-             └─ HTTPS + private bearer secret → owner-operated private adapter
+       ├─ DeepSpace JobRoom: durable orchestration and checkpoints
+       │     ├─ Catalog OpenAI: screenplay structure + character/scene images
+       │     ├─ Catalog ElevenLabs: voice list + selected speech
+       │     └─ HTTPS + private bearer secret → owner-operated private adapter
                    ├─ SQLite idempotency ledger + private asset directory
                    └─ imports original Illustory RealPipeline / ComposerService
-                         ├─ AI parsing and images
+                         ├─ reference-conditioned first frame
                          ├─ Vast GPU / ComfyUI H3 and SeedVR2
                          └─ FFmpeg trims and export
+       ├─ Catalog YouTube: optional top-three reference search
+       └─ Catalog Email: optional export-ready notice
 ```
 
-Trust boundaries: the browser cannot reach the private adapter or read its token; RecordRoom product collections deny direct client access; server actions use app-level record tools only after checking workspace membership; the media proxy checks membership before forwarding file bytes. Browser WebSocket routes and generic catalog integration routes are closed. The private adapter authenticates the Worker bearer token, rejects key traversal, validates replay hashes and keeps binaries off the public app scope. Operator-controlled environment variables and DeepSpace secrets hold service credentials.
+Trust boundaries: the browser cannot reach the private adapter or read its token; RecordRoom product collections deny direct client access; server actions use app-level record tools only after checking workspace membership; the media proxy checks membership before forwarding file bytes. Browser WebSocket routes and generic browser Catalog integration routes are closed. Catalog calls occur only behind role-checked actions or jobs. The private adapter authenticates the Worker bearer token, rejects key traversal, validates replay hashes and keeps binaries off the public app scope. Operator-controlled environment variables and DeepSpace secrets hold service credentials.
 
 ## Actual data and control flow
 
 1. `src/actions/index.ts` creates a project with a script, empty storyboard, revision 1 and workspace ID. Each edit requires owner/editor membership and an expected revision.
 2. The owner submits a job. The action validates operation/target/dependencies, derives a deterministic job record ID from the project and idempotency key, copies selected asset metadata into an input snapshot, persists a `workflow-jobs` row, and enqueues `illustory-workflow` in JobRoom. Concurrent requests for the same key converge on the same row.
-3. `src/jobs.ts` reads that row from RecordRoom, POSTs the snapshot to the private adapter with the same key, saves its stable ID, polls with `ctx.continue`, and updates user-visible job state. A Worker restart may replay POST safely because the private adapter enforces idempotency.
-4. The adapter executes the original private pipeline. It writes binaries to an isolated private directory and returns a relative storage key, hash, size and MIME type. For parsing it returns structured storyboard data.
-   It also keeps the parser's richer camera, motion, emotion and appearance fields in private storage under the parse job ID. Later generation overlays public editorial changes on that rich snapshot; manually added items use a reduced fallback representation.
+3. For parse, character images, scene anchors or speech, `src/jobs.ts` calls the relevant DeepSpace Catalog endpoint. Parse output is validated against the public storyboard contract; image/audio data URIs are checksum-verified and copied to the protected private adapter. The job records Catalog intent before billing and checkpoints its result before publication. No automatic Catalog retry can create a duplicate bill after an ambiguous crash.
+4. For first frame, H3, SeedVR2 and export, `src/jobs.ts` POSTs the snapshot to the private adapter with the same key, saves its stable ID, polls with `ctx.continue`, and updates user-visible job state. A Worker restart may replay POST safely because the private adapter enforces idempotency. The adapter imports the original reference-conditioned image, GPU and composition pipeline. It writes binaries to an isolated private directory and returns a relative storage key, hash, size and MIME type. The public storyboard projection supplies editable character, scene, camera, dialogue and beat data; the original richer parser snapshot is no longer generated in this adaptation.
 5. The Worker re-reads project revision and cancellation status. For media it also checks HEAD hash/size before creating an immutable asset version. It selects the new version only while the input revision is current. A failed, cancelled or stale job does not select an asset.
 6. The Studio polls authorized actions every three seconds. Images use authenticated asset fetches; video streams through a same-origin, membership-checked route that supports Range.
 
 ## State and dependencies
 
-DeepSpace RecordRoom holds persistent workspace membership, projects, scripts, storyboards, job metadata and asset version metadata. JobRoom holds queue/checkpoint state. The private adapter has a SQLite idempotency ledger and private media directory; its engine imports the original source and uses its existing external provider credentials. The browser has only transient edit drafts and object URLs. No customer script, generated binary, prompt, ComfyUI workflow, or private credential is committed here.
+DeepSpace RecordRoom holds persistent workspace membership, projects, scripts, storyboards, job metadata and asset version metadata. JobRoom holds queue/checkpoint state. The private adapter has a SQLite idempotency ledger and private media directory; its engine imports the original source and uses its existing provider credentials for reference-conditioned first frames, GPU motion, enhancement and export. The browser has only transient edit drafts and object URLs. The public repository contains reviewable script and image prompts, but no proprietary H3/ComfyUI prompt assembly or workflow, customer script, generated binary, or private credential.
 
 ## Acceptance evidence and known gaps
 
@@ -47,7 +50,9 @@ DeepSpace RecordRoom holds persistent workspace membership, projects, scripts, s
 | Revision and stale result rejection | Unit tests change project revision before completion; no asset created | Implemented offline; concurrent edit race remains |
 | Idempotent request and private submission | Concurrent action test creates one workflow row; adapter contract test repeats the same key and rejects changed input | Implemented offline |
 | Cancelled/failed do not publish | Unit tests; adapter cancellation contract test | Implemented offline |
+| Old media cannot attach to a reparsed storyboard | Parse clears current selections; creative edits invalidate them, trim-only edits preserve them | Implemented offline |
 | Private asset integrity and access | Worker checks HEAD hash/size; adapter path isolation and Range tested | Implemented offline; live media test required |
+| Catalog OpenAI, ElevenLabs, YouTube and Email | Endpoint schemas checked with official CLI; server-side action/job paths implemented; offline call mocks verify search, voices, parse and speech publication | Implemented offline; provider responses and billing unverified |
 | Login, refresh persistence and browser workflow | Requires intended owner DeepSpace CLI login and minted app ID | Blocked for runtime verification |
 | One actual H3/export run | Requires reachable private adapter and approved paid spend | Not verified |
 | Atomic same-project concurrent edits | RecordRoom action performs read then update without transactional compare-and-swap | Must implement before shared production editing; not needed for one-editor exercise proof |
@@ -67,7 +72,8 @@ The [StoryNest](https://github.com/deepdotspace/storynest) reference uses a JobR
 | Server actions for product records | Membership is per workspace; app roles alone cannot authorize one tenant's records | SDK supports first-class membership-aware row policy at required granularity |
 | Keep binaries in private service | App-public file scope is wrong for customer media; private user scope is not shared workspace scope | A workspace-private storage primitive and measured file caps fit |
 | Three-second authorized status refresh | Generic scaffold WebSocket rooms lack workspace-level authorization | Add workspace-scoped subscriptions only if the SDK provides enforceable tenant filters |
-| No catalog API | Existing private engine already supplies needed AI/GPU; a second vendor adds cost without improving this flow | A concrete new user requirement is not covered by the existing engine |
+| Use four Catalog integrations with distinct jobs | OpenAI exposes reviewable parser/visual direction; ElevenLabs adds selectable speech; YouTube adds opt-in research; Email adds delivery notice | Remove any whose live value does not justify its price |
+| Keep conditioned first-frame generation private | Catalog image endpoint accepts a text prompt only; the existing workflow edits with character and scene references | Catalog adds a reference-image edit endpoint with equivalent quality |
 
 ## Assumption register
 
@@ -75,7 +81,7 @@ The [StoryNest](https://github.com/deepdotspace/storynest) reference uses a JobR
 |---|---|---|
 | One editor changes a project at a time | Lost updates from non-atomic read-check-write | Serialize project edits or add transactional CAS |
 | Private adapter can be reached over HTTPS | Jobs fail before execution | Provide private ingress and set Worker secret URL |
-| Rich parser snapshots remain available by parse job ID | Manually added shots fall back to reduced motion metadata | Run a one-shot visual evaluation and refine the private projection if needed |
+| Public storyboard projection retains enough shot direction for H3 | Reduced motion metadata may produce weak video | Run a one-shot visual evaluation and refine schema/adapter fields if needed |
 | GPU operations are idempotent at adapter boundary | Worker replay could spend twice | Private ledger dedupes; interrupted work is never automatically resubmitted |
 | Studio pilot uses a small job volume | App-wide JobRoom serial execution becomes a bottleneck | Measure queue delay, then partition queues by workspace or project |
 
@@ -85,5 +91,6 @@ The [StoryNest](https://github.com/deepdotspace/storynest) reference uses a JobR
 |---|---|---|---|---|---|
 | Runtime app identity and browser flow | CLI reports `not_authenticated`; `vite build` rejects `__APP_ID__` | High | Must Implement | Intended owner logs in; run `dev start`, browser and multi-user tests | Open |
 | Private one-shot execution | No private HTTPS URL, provider credentials or spend approval supplied | High | Must Implement | Connect adapter, approve a single-run ceiling, observe parse→export | Open |
+| Catalog response and cost verification | No authenticated paid call yet; output envelopes and image/voice prices may vary by account | High | Must Implement | One capped call per selected endpoint; record response shape and actual charge | Open |
 | Concurrent edit atomicity | Server action reads revision then updates separately | Medium | Must Understand | Add serialized/conditional project write before true multi-editor customer use | Open |
 | Kubernetes, Kafka, second model vendor | No concrete pilot requirement | Low | Do Not Build | Avoid until measurements justify | Closed |

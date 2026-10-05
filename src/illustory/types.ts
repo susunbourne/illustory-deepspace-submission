@@ -1,24 +1,36 @@
 export type WorkspaceRole = 'owner' | 'editor' | 'reviewer' | 'viewer'
-export type Operation = 'parse' | 'character' | 'scene-anchor' | 'first-frame' | 'h3' | 'seedvr2' | 'export'
+export type Operation = 'parse' | 'character' | 'scene-anchor' | 'voice' | 'first-frame' | 'h3' | 'seedvr2' | 'export'
 export type TargetType = 'project' | 'character' | 'scene' | 'shot'
 export type JobStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled' | 'stale'
 
-export interface Character { id: string; name: string; description: string }
-export interface Shot { id: string; title: string; description: string; durationSeconds: number; trimStartSeconds?: number; trimEndSeconds?: number }
+export interface Character { id: string; name: string; description: string; appearance?: Record<string, string>; voiceId?: string }
+export interface Beat { id: string; description: string; durationSeconds: number; speaker?: string; dialogue?: string }
+export interface Shot {
+  id: string; title: string; description: string; durationSeconds: number
+  characters?: string[]; shotType?: string; cameraAngle?: string; timeOfDay?: string
+  dialogue?: string; speaker?: string; narration?: string; beats?: Beat[]
+  referenceVideo?: { title: string; url: string }
+  trimStartSeconds?: number; trimEndSeconds?: number
+}
 export interface Scene { id: string; title: string; description: string; shots: Shot[] }
 export interface Storyboard { characters: Character[]; scenes: Scene[] }
+export interface VideoReference { title: string; url: string; thumbnail?: string }
 export interface Workspace { [key: string]: unknown; name: string; ownerId: string }
 export interface Membership { [key: string]: unknown; workspaceId: string; userId: string; role: WorkspaceRole; status: 'active' | 'suspended' }
 export interface Project {
   [key: string]: unknown
   workspaceId: string
   title: string
+  description: string
   script: string
   revision: number
   storyboard: Storyboard
   currentAssets: Record<string, string>
   lastParseJobId: string
   lastParseRevision: number
+  notifyOnExport: boolean
+  referenceCandidates: VideoReference[]
+  referenceQuery: string
   createdByUserId: string
 }
 export interface Asset {
@@ -53,6 +65,10 @@ export interface WorkflowJob {
   outputVersion: number
   error: string
   requestedByUserId: string
+  catalogAttempted?: boolean
+  catalogResult?: { storyboard?: Storyboard; asset?: { storageKey: string; mimeType: string; sha256: string; byteSize: number } }
+  notificationStatus?: 'none' | 'attempted' | 'sent' | 'failed'
+  notificationError?: string
   request: Record<string, unknown>
 }
 export type Row<T> = { recordId: string; data: T; createdAt?: string; updatedAt?: string }

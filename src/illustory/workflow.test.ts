@@ -5,12 +5,14 @@ import type { Project, WorkflowJob } from './types'
 import { validStoryboard } from './validation'
 
 const enqueueJob = vi.hoisted(() => vi.fn(async () => 'queue-1'))
-vi.mock('deepspace/worker', () => ({ enqueueJob }))
+const integrationCall = vi.hoisted(() => vi.fn())
+vi.mock('deepspace/worker', () => ({ enqueueJob, buildCronContext: () => ({ integrations: { call: integrationCall } }) }))
 
 type Stored = { recordId: string; data: Record<string, unknown> }
 class Records {
   tables = new Map<string, Map<string, Stored>>()
   failNextJobSuccess = false
+  emailFrom = ''
   insert(collection: string, id: string, data: Record<string, unknown>) {
     if (!this.tables.has(collection)) this.tables.set(collection, new Map())
     this.tables.get(collection)!.set(id, { recordId: id, data })
@@ -57,11 +59,12 @@ class Records {
       create: (collection: string, data: Record<string, unknown>, recordId?: string) => this.execute('records.create', { collection, data, recordId }),
       update: (collection: string, recordId: string, data: Record<string, unknown>) => this.execute('records.update', { collection, recordId, data }),
       remove: (collection: string, recordId: string) => this.execute('records.delete', { collection, recordId }),
+      integration: async (endpoint: string, params: Record<string, unknown>) => ({ success: true, data: await integrationCall(endpoint, params) }),
     }
   }
   env() {
     return {
-      DEEPSPACE_APP_ID: 'test-app', OWNER_USER_ID: 'owner', PRIVATE_WORKFLOW_URL: 'https://private.test', PRIVATE_WORKFLOW_TOKEN: 'test-token',
+      DEEPSPACE_APP_ID: 'test-app', OWNER_USER_ID: 'owner', APP_NAME: 'test-app', PRIVATE_WORKFLOW_URL: 'https://private.test', PRIVATE_WORKFLOW_TOKEN: 'test-token', EMAIL_FROM: this.emailFrom,
       JOB_ROOMS: {}, RECORD_ROOMS: { idFromName: (name: string) => name, get: () => ({ fetch: async (request: Request) => {
         const { tool, params } = await request.json() as { tool: string; params: Record<string, unknown> }
         return Response.json(await this.execute(tool, params))
@@ -71,11 +74,11 @@ class Records {
 }
 
 function project(): Project {
-  return { workspaceId: 'w', title: 'One scene', script: 'A room at dusk.', revision: 1, createdByUserId: 'owner', currentAssets: {}, lastParseJobId: '', lastParseRevision: 0,
+  return { workspaceId: 'w', title: 'One scene', description: '', script: 'A room at dusk.', revision: 1, createdByUserId: 'owner', currentAssets: {}, lastParseJobId: '', lastParseRevision: 0, notifyOnExport: false, referenceCandidates: [], referenceQuery: '',
     storyboard: { characters: [{ id: 'c', name: 'Ari', description: '' }], scenes: [{ id: 's', title: 'Room', description: '', shots: [{ id: 'q', title: 'Close up', description: '', durationSeconds: 5 }] }] } }
 }
-function job(operation: WorkflowJob['operation'] = 'character'): WorkflowJob {
-  return { workspaceId: 'w', projectId: 'p', operation, targetType: 'character', targetId: 'c', inputRevision: 1, idempotencyKey: 'request-0001',
+function job(operation: WorkflowJob['operation'] = 'first-frame'): WorkflowJob {
+  return { workspaceId: 'w', projectId: 'p', operation, targetType: operation === 'parse' ? 'project' : operation === 'first-frame' ? 'shot' : 'character', targetId: operation === 'parse' ? 'p' : operation === 'first-frame' ? 'q' : 'c', inputRevision: 1, idempotencyKey: 'request-0001',
     status: 'queued', progress: 0, providerJobId: '', outputAssetId: '', outputVersion: 0, error: '', requestedByUserId: 'owner', request: { script: 'A room at dusk.', storyboard: project().storyboard } }
 }
 function seeded() {
@@ -144,16 +147,56 @@ describe('workspace authorization and revisions', () => {
     r.insert('users', 'new', { userId: 'new' })
     expect((await invoke(r, 'setMemberRole', 'owner', { workspaceId: 'w', userId: 'new', role: 'reviewer' })).success).toBe(true)
   })
+  it('restricts Catalog research and voice discovery to owners and stores only reference metadata', async () => {
+    const r = seeded()
+    r.get('projects', 'p')!.data.title = 'Rain at the station'
+    r.get('projects', 'p')!.data.description = 'A quiet arrival'
+    expect((await invoke(r, 'searchReferences', 'viewer', { projectId: 'p' })).success).toBe(false)
+    expect((await invoke(r, 'listVoices', 'editor', { projectId: 'p' })).success).toBe(false)
+    integrationCall.mockResolvedValueOnce({ videos: [
+      { title: 'Rainy station composition', links: { watch: 'https://www.youtube.com/watch?v=abc123' } },
+      { title: 'Unsafe link', links: { watch: 'https://bad.example/video' } },
+    ] })
+    const references = await invoke(r, 'searchReferences', 'owner', { projectId: 'p' })
+    expect(references.success).toBe(true)
+    expect(integrationCall).toHaveBeenCalledWith('youtube/search-videos', expect.objectContaining({ maxResults: 3 }))
+    expect((r.get('projects', 'p')?.data.referenceCandidates as unknown[]).length).toBe(1)
+    await invoke(r, 'searchReferences', 'owner', { projectId: 'p' })
+    expect(integrationCall).toHaveBeenCalledTimes(1)
+    integrationCall.mockResolvedValueOnce({ voices: [{ voice_id: 'voice-123', name: 'Ari', preview_url: 'https://example.com/preview.mp3' }] })
+    const voices = await invoke(r, 'listVoices', 'owner', { projectId: 'p' })
+    expect(voices.success).toBe(true)
+    expect(integrationCall).toHaveBeenCalledWith('elevenlabs/list-voices', {})
+  })
+  it('changes export email preference without invalidating an in-flight creative revision', async () => {
+    const r = seeded()
+    expect((await invoke(r, 'setExportNotification', 'viewer', { projectId: 'p', enabled: true })).success).toBe(false)
+    expect((await invoke(r, 'setExportNotification', 'editor', { projectId: 'p', enabled: true })).success).toBe(true)
+    expect(r.get('projects', 'p')?.data.notifyOnExport).toBe(true)
+    expect(r.get('projects', 'p')?.data.revision).toBe(1)
+  })
+  it('keeps selected clips for trim edits but invalidates them for creative changes', async () => {
+    const r = seeded()
+    r.get('projects', 'p')!.data.currentAssets = { 'h3:q': 'video-a' }
+    const trimBoard = project().storyboard
+    trimBoard.scenes[0].shots[0].trimStartSeconds = 0.5
+    expect((await invoke(r, 'saveProject', 'editor', { projectId: 'p', expectedRevision: 1, storyboard: trimBoard })).success).toBe(true)
+    expect(r.get('projects', 'p')?.data.currentAssets).toEqual({ 'h3:q': 'video-a' })
+    const changedBoard = structuredClone(trimBoard)
+    changedBoard.scenes[0].shots[0].description = 'A different action'
+    expect((await invoke(r, 'saveProject', 'editor', { projectId: 'p', expectedRevision: 2, storyboard: changedBoard })).success).toBe(true)
+    expect(r.get('projects', 'p')?.data.currentAssets).toEqual({})
+  })
 })
 
 describe('result publication', () => {
-  beforeEach(() => { vi.restoreAllMocks(); enqueueJob.mockClear() })
-  function privateResponse(status: 'succeeded' | 'failed' = 'succeeded') {
+  beforeEach(() => { vi.restoreAllMocks(); enqueueJob.mockClear(); integrationCall.mockReset() })
+  function privateResponse(status: 'succeeded' | 'failed' = 'succeeded', mime = 'image/png') {
     vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
       if (init?.method === 'HEAD') return new Response(null, { status: 200, headers: { 'X-Content-Sha256': 'a'.repeat(64), 'Content-Length': '200' } })
       if (url.endsWith('/v1/jobs') || url.endsWith('/v1/jobs/remote')) return Response.json(url.endsWith('/v1/jobs') ? { id: 'remote' } :
         { id: 'remote', status, progress: 1, error: status === 'failed' ? 'provider failed' : undefined,
-          result: { asset: { storageKey: 'projects/p/jobs/output.png', mimeType: 'image/png', sha256: 'a'.repeat(64), byteSize: 200 } } })
+          result: { asset: { storageKey: mime === 'video/mp4' ? 'projects/p/jobs/output.mp4' : 'projects/p/jobs/output.png', mimeType: mime, sha256: 'a'.repeat(64), byteSize: 200 } } })
       throw new Error(url)
     }))
   }
@@ -177,7 +220,7 @@ describe('result publication', () => {
     await run(r)
     expect(r.get('workflow-jobs', 'j')?.data.status).toBe('succeeded')
     expect(r.tables.get('assets')?.size).toBe(1)
-    const current = (r.get('projects', 'p')?.data.currentAssets as Record<string,string>)['character:c']
+    const current = (r.get('projects', 'p')?.data.currentAssets as Record<string,string>)['first-frame:q']
     expect(current).toBeTruthy()
     await run(r)
     expect(r.tables.get('assets')?.size).toBe(1)
@@ -196,12 +239,54 @@ describe('result publication', () => {
   })
   it('does not apply a parsed storyboard twice after a status-write interruption', async () => {
     const board = project().storyboard
-    vi.stubGlobal('fetch', vi.fn(async (url: string) => Response.json(url.endsWith('/v1/jobs') ? { id: 'remote' } : { id: 'remote', status: 'succeeded', progress: 1, result: { storyboard: board } })))
+    integrationCall.mockResolvedValue({ choices: [{ message: { content: JSON.stringify(board) } }] })
     const r = seeded(); r.insert('workflow-jobs', 'j', { ...job('parse'), targetType: 'project', targetId: 'p' }); r.failNextJobSuccess = true
+    r.get('projects', 'p')!.data.currentAssets = { 'character:c': 'old-image' }
     await expect(run(r)).rejects.toThrow('Simulated Worker interruption')
     expect(r.get('projects', 'p')?.data.revision).toBe(2)
+    expect(r.get('projects', 'p')?.data.currentAssets).toEqual({})
     await run(r)
     expect(r.get('projects', 'p')?.data.revision).toBe(2)
     expect(r.get('workflow-jobs', 'j')?.data.outputVersion).toBe(2)
+    expect(integrationCall).toHaveBeenCalledTimes(1)
+  })
+  it('publishes a catalog voice through private storage once', async () => {
+    const data = btoa('a'.repeat(200))
+    const media = `data:audio/mpeg;base64,${data}`
+    integrationCall.mockResolvedValue({ audioUrl: media })
+    vi.stubGlobal('fetch', vi.fn(async (_url: string, init?: RequestInit) => {
+      if (init?.method === 'PUT') {
+        const bytes = init.body as Uint8Array
+        const digest = String((init.headers as Record<string, string>)['X-Content-Sha256'])
+        return Response.json({ storageKey: 'catalog/p/j.mp3', mimeType: 'audio/mpeg', sha256: digest, byteSize: bytes.length })
+      }
+      if (init?.method === 'HEAD') return new Response(null, { status: 200, headers: { 'X-Content-Sha256': 'c2a908d98f5df987ade41b5fce213067efbcc21ef2240212a41e54b5e7c28ae5', 'Content-Length': '200' } })
+      throw new Error('Unexpected private request')
+    }))
+    const r = seeded()
+    const board = project().storyboard
+    board.characters[0].voiceId = 'voice-123'
+    r.insert('workflow-jobs', 'j', { ...job('voice'), request: { script: 'A room at dusk.', storyboard: board, options: { text: 'Ari speaks.' } } })
+    await run(r)
+    expect(r.get('workflow-jobs', 'j')?.data.status).toBe('succeeded')
+    expect((r.get('projects', 'p')?.data.currentAssets as Record<string, string>)['voice:c']).toBeTruthy()
+    expect(integrationCall).toHaveBeenCalledTimes(1)
+    await run(r)
+    expect(integrationCall).toHaveBeenCalledTimes(1)
+  })
+  it('records one optional email after export without altering a published video', async () => {
+    privateResponse('succeeded', 'video/mp4')
+    integrationCall.mockResolvedValue({ id: 'mail-1' })
+    const r = seeded()
+    r.emailFrom = 'studio@example.com'
+    r.get('projects', 'p')!.data.notifyOnExport = true
+    r.insert('users', 'owner', { email: 'owner@example.com' })
+    r.insert('workflow-jobs', 'j', { ...job('export'), targetType: 'project', targetId: 'p' })
+    await run(r)
+    expect(r.get('workflow-jobs', 'j')?.data.status).toBe('succeeded')
+    expect(r.get('workflow-jobs', 'j')?.data.notificationStatus).toBe('sent')
+    expect(integrationCall).toHaveBeenCalledWith('email/send', expect.objectContaining({ to: 'owner@example.com' }))
+    await run(r)
+    expect(integrationCall).toHaveBeenCalledTimes(1)
   })
 })

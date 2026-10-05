@@ -115,6 +115,8 @@ export interface Env extends DOBindings<typeof __DO_MANIFEST__> {
   /** Private workflow service URL and token. Set through DeepSpace secrets, never VITE_ variables. */
   PRIVATE_WORKFLOW_URL?: string
   PRIVATE_WORKFLOW_TOKEN?: string
+  /** Verified transactional sender address, configured only through DeepSpace secrets. */
+  EMAIL_FROM?: string
   /**
    * Enables /api/debug/* only when exactly "true". The route still requires
    * an authenticated app owner/admin. deepspace dev/test set it locally.
