@@ -24,7 +24,7 @@ Commands and observed results:
 
 ```sh
 npm run type-check       # passed
-npm run test:unit        # 30 tests passed
+npm run test:unit        # 31 tests passed
 npm run lint             # passed
 npm run build            # passed after official app init
 npx deepspace test run smoke --port 5174                # 6 passed

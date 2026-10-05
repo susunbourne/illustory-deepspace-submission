@@ -13,3 +13,11 @@ it('keeps product collections unavailable through direct client record permissio
     }
   }
 })
+
+it('persists private execution evidence on workflow jobs', () => {
+  const jobSchema = schemas.find(schema => schema.name === 'workflow-jobs')
+  expect(jobSchema?.columns.map(column => column.name)).toEqual(expect.arrayContaining([
+    'providerJobId', 'providerPhase', 'providerStartedAt', 'providerFinishedAt',
+    'inputRevision', 'outputVersion', 'outputAssetId',
+  ]))
+})

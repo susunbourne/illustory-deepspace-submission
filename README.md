@@ -65,7 +65,7 @@ All endpoints require a server-side bearer token. `PUT /v1/catalog-assets/{jobId
 
 ## Verification so far
 
-`npm run type-check`, `npm run lint`, `npm run build`, and `npm run test:unit` pass locally (30 TypeScript tests). `npx deepspace test run smoke --port 5174` passed all six browser smoke tests, and `npx deepspace test run tests/roles.spec.ts --port 5174` passed the four-role browser flow. These tests exercised the real local DeepSpace runtime with SDK test accounts: project script and manually edited cast/scene/shot records survived refresh. The private adapter's `python -m pytest -q -p no:cacheprovider test_contract.py` passed ten offline tests using the original app's `.venv`. The user's own browser review, Catalog responses, private media playback, paid generation/export and online deployment remain unverified. No paid calls were approved or launched.
+`npm run type-check`, `npm run lint`, `npm run build`, and `npm run test:unit` pass locally (31 TypeScript tests). `npx deepspace test run smoke --port 5174` passed all six browser smoke tests, and `npx deepspace test run tests/roles.spec.ts --port 5174` passed the four-role browser flow. These tests exercised the real local DeepSpace runtime with SDK test accounts: project script and manually edited cast/scene/shot records survived refresh. The private adapter's `python -m pytest -q -p no:cacheprovider test_contract.py` passed ten offline tests using the original app's `.venv`. The user's own browser review, Catalog responses, private media playback, paid generation/export and online deployment remain unverified. No paid calls were approved or launched.
 
 ## Tradeoffs and limits
 
