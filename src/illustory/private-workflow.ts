@@ -6,7 +6,7 @@ export interface PrivateResult {
   storyboard?: Storyboard
   asset?: { storageKey: string; mimeType: string; sha256: string; byteSize: number }
 }
-export interface PrivateStatus { id: string; status: 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled'; progress: number; error?: string; result?: PrivateResult }
+export interface PrivateStatus { id: string; status: 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled'; progress: number; phase?: string; startedAt?: number | null; finishedAt?: number | null; error?: string; result?: PrivateResult }
 
 function config(env: Env) {
   if (!env.PRIVATE_WORKFLOW_URL || !env.PRIVATE_WORKFLOW_TOKEN) throw new Error('Private workflow service is not configured')

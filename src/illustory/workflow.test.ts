@@ -198,7 +198,7 @@ describe('result publication', () => {
     vi.stubGlobal('fetch', vi.fn(async (url: string, init?: RequestInit) => {
       if (init?.method === 'HEAD') return new Response(null, { status: 200, headers: { 'X-Content-Sha256': 'a'.repeat(64), 'Content-Length': '200' } })
       if (url.endsWith('/v1/jobs') || url.endsWith('/v1/jobs/remote')) return Response.json(url.endsWith('/v1/jobs') ? { id: 'remote' } :
-        { id: 'remote', status, progress: 1, error: status === 'failed' ? 'provider failed' : undefined,
+        { id: 'remote', status, phase: status === 'succeeded' ? 'ready' : 'failed', startedAt: 100, finishedAt: 104, progress: 1, error: status === 'failed' ? 'provider failed' : undefined,
           result: { asset: { storageKey: mime === 'video/mp4' ? 'projects/p/jobs/output.mp4' : 'projects/p/jobs/output.png', mimeType: mime, sha256: 'a'.repeat(64), byteSize: 200 } } })
       throw new Error(url)
     }))
@@ -215,6 +215,7 @@ describe('result publication', () => {
     const failed = seeded(); failed.insert('workflow-jobs', 'j', { ...job() })
     await expect(run(failed)).rejects.toThrow('Private job failed')
     expect(failed.get('workflow-jobs', 'j')?.data.status).toBe('failed')
+    expect(failed.get('workflow-jobs', 'j')?.data.error).toBe('provider failed')
     expect(failed.tables.get('assets')?.size ?? 0).toBe(0)
   })
   it('publishes one version and never republishes a duplicate or cancelled job', async () => {
@@ -222,6 +223,8 @@ describe('result publication', () => {
     const r = seeded(); r.insert('workflow-jobs', 'j', { ...job() })
     await run(r)
     expect(r.get('workflow-jobs', 'j')?.data.status).toBe('succeeded')
+    expect(r.get('workflow-jobs', 'j')?.data.providerPhase).toBe('ready')
+    expect(r.get('workflow-jobs', 'j')?.data.providerFinishedAt).toBe(104)
     expect(r.tables.get('assets')?.size).toBe(1)
     const current = (r.get('projects', 'p')?.data.currentAssets as Record<string,string>)['first-frame:q']
     expect(current).toBeTruthy()

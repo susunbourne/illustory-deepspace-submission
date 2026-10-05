@@ -6,6 +6,8 @@ An authenticated, workspace-scoped production control plane for one short-video 
 
 The Studio keeps project editing in the main column. Project jobs and asset counts open from **Activity**; owner-only membership controls open from **Workspace settings** beside the workspace selector. These panels stay off the bottom of laptop-width pages.
 
+Private video jobs expose an **Execution details** panel in Activity. It shows persisted DeepSpace and private job IDs, pinned revision, adapter phase, real start-to-finish time when available, and the published asset's size and SHA-256. See [private GPU execution boundary](docs/GPU_EXECUTION.md) for the actual call chain and the evidence still needed from a paid render.
+
 ## Why this split
 
 DeepSpace owns sign-in, the app Worker, persistent workspace/project/job/asset metadata through RecordRoom, a durable JobRoom, and four useful Catalog integrations. OpenAI parses the script and generates character/scene references. ElevenLabs supplies selectable voices and speech audio. YouTube provides three optional visual references from the title and synopsis. Email can notify the active workspace owner after a successful export, even when a reviewer requested it. The original private Illustory service performs reference-conditioned shot first frames, Vast/ComfyUI H3, optional SeedVR2, private binary storage, and FFmpeg. The browser never receives the private service token.
@@ -63,7 +65,7 @@ All endpoints require a server-side bearer token. `PUT /v1/catalog-assets/{jobId
 
 ## Verification so far
 
-`npm run type-check`, `npm run lint`, `npm run build`, and `npm run test:unit` pass locally (30 TypeScript tests). `npx deepspace test run smoke --port 5174` passed all six browser smoke tests, and `npx deepspace test run tests/roles.spec.ts --port 5174` passed the four-role browser flow. These tests exercised the real local DeepSpace runtime with SDK test accounts: project script and manually edited cast/scene/shot records survived refresh. The private adapter's `python -m pytest -q -p no:cacheprovider test_contract.py` passed eight offline tests using the original app's `.venv`. The user's own browser review, Catalog responses, private media playback, paid generation/export and online deployment remain unverified. No paid calls were approved or launched.
+`npm run type-check`, `npm run lint`, `npm run build`, and `npm run test:unit` pass locally (30 TypeScript tests). `npx deepspace test run smoke --port 5174` passed all six browser smoke tests, and `npx deepspace test run tests/roles.spec.ts --port 5174` passed the four-role browser flow. These tests exercised the real local DeepSpace runtime with SDK test accounts: project script and manually edited cast/scene/shot records survived refresh. The private adapter's `python -m pytest -q -p no:cacheprovider test_contract.py` passed ten offline tests using the original app's `.venv`. The user's own browser review, Catalog responses, private media playback, paid generation/export and online deployment remain unverified. No paid calls were approved or launched.
 
 ## Tradeoffs and limits
 

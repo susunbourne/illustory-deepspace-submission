@@ -14,11 +14,11 @@ The original Git root had 136 pre-existing status entries at the start and still
 |---|---|---|
 | DeepSpace auth shell and protected Studio | `src/pages/(app)/_layout.tsx`, `studio.tsx`, `worker.ts` | Registered and started locally; test-account browser flow passed |
 | Workspace/project/storyboard and role checks | `src/actions/index.ts`, `src/schemas/illustory-schemas.ts` | Unit and four-account browser tests passed |
-| Durable job and asset version control | `src/jobs.ts`, `src/illustory/private-workflow.ts` | Unit tested; external provider not exercised |
+| Durable job and asset version control | `src/jobs.ts`, `src/illustory/private-workflow.ts` | Unit tested, including adapter phase/timing persistence; external provider not exercised |
 | DeepSpace Catalog integrations | `src/illustory/original-creative.ts`, `src/illustory/creative.ts`, `src/illustory/catalog.ts`, `src/integrations.ts` | Two-stage original Character Bible and scene/shot parsing, original character/scene image prompts, ElevenLabs voices/speech, YouTube research, Email export notice wired; offline checks only |
 | Private media proxy and access check | `src/server/illustory-routes.ts` | Code and private range contract tested |
-| Existing-engine bridge | Private adapter `bridge.py` outside repo | Auth/idempotency/restart/path tests pass; model/GPU path unverified |
-| Reviewer-facing UI | `studio.tsx`, `studio.css`, `src/pages/index.tsx` | Build and browser smoke passed; owner identified a narrow-layout issue, now corrected and role-browser tested; full stage review pending |
+| Existing-engine bridge | Private adapter `bridge.py` outside repo | Auth/idempotency/restart/path and telemetry migration tests pass; model/GPU path unverified |
+| Reviewer-facing UI | `studio.tsx`, `studio.css`, `src/pages/index.tsx` | Video pipeline and execution details added in Edit & Export; narrow-layout and four-role browser tests passed; full stage review pending |
 
 Commands and observed results:
 
@@ -30,10 +30,10 @@ npm run build            # passed after official app init
 npx deepspace test run smoke --port 5174                # 6 passed
 npx deepspace test run tests/roles.spec.ts --port 5174  # 1 four-account flow passed
 # In private adapter dir, with ILLUSTORY_SOURCE_ROOT set and original .venv Python:
-python -m pytest -q -p no:cacheprovider test_contract.py  # 8 passed, 1 deprecation warning
+python -m pytest -q -p no:cacheprovider test_contract.py  # 10 passed, 1 deprecation warning
 ```
 
-The owner signed in to the CLI and official `app init` minted this checkout's ID. `npx deepspace dev start --json` reported ready at `http://localhost:5173/`. SDK test accounts verified sign-in, manual storyboard persistence after reload and owner/editor/reviewer/viewer controls. The owner's own browser review, live media, Catalog billing and paid one-shot rendering have not been verified. The app source remains unclaimed; no remote, push, deploy or portal submission exists.
+The owner signed in to the CLI and official `app init` minted this checkout's ID. `npx deepspace dev start --json` reported ready at `http://localhost:5173/`. SDK test accounts verified sign-in, manual storyboard persistence after reload and owner/editor/reviewer/viewer controls. The owner has reviewed parts of the local Studio and requested the GPU execution explanation. The new Edit & Export panel was visually inspected in the local browser; it truthfully says no video run is recorded. A local private-adapter process remains on the previous code version because the attempted restart was blocked by automatic approval review before execution. Restart it from the owner's own shell before testing live telemetry. Live media, Catalog billing and paid one-shot rendering have not been verified. The app source remains unclaimed; no remote, push, deploy or portal submission exists.
 
 `npm audit` reports four high advisories in the build-only route generator dependency chain (`@generouted/react-router` → `fast-glob` → `micromatch` → `braces`) with no upstream fix published, and one low advisory in `esbuild`'s Windows development server. `npm audit --omit=dev` reports only that low `esbuild` advisory. No vulnerable service endpoint is intentionally exposed by the app, and this repository has not been deployed; recheck advisories before release.
 

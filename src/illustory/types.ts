@@ -66,6 +66,9 @@ export interface WorkflowJob {
   status: JobStatus
   progress: number
   providerJobId: string
+  providerPhase?: string
+  providerStartedAt?: number | null
+  providerFinishedAt?: number | null
   outputAssetId: string
   outputVersion: number
   error: string

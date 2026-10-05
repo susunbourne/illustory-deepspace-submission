@@ -14,6 +14,21 @@
 .is-card-body details label,.is-shot-content details label{display:grid;gap:5px;margin-top:10px;color:#96a9b8;font-size:11px}
 .is-beat-editor{border-top:1px solid #2a3946;margin-top:10px;padding-top:10px;display:grid;grid-template-columns:minmax(0,2fr) repeat(3,minmax(75px,1fr));gap:9px}
 @media(max-width:1000px){.is-beat-editor{grid-template-columns:repeat(2,minmax(0,1fr))}}
+.is-job-evidence{border-top:1px solid #33404c;margin-top:6px;padding-top:8px;color:#a9c0d0}
+.is-job-evidence summary{cursor:pointer;font-size:11px;font-weight:650;color:#c8deeb}
+.is-job-evidence dl{display:grid;grid-template-columns:86px minmax(0,1fr);gap:7px 9px;margin:11px 0;font-size:10px;line-height:1.4}
+.is-job-evidence dt{color:#879aaa}.is-job-evidence dd{margin:0;overflow-wrap:anywhere}
+.is-job-evidence code{font-family:ui-monospace,SFMono-Regular,Consolas,monospace;color:#d7eaf7;user-select:text}
+.is-job-evidence p{font-size:10px;line-height:1.5;color:#8195a5}
+.is-execution-overview{border:1px solid #344b5c;border-radius:12px;background:linear-gradient(145deg,#152532,#101923);padding:22px;display:grid;gap:18px}
+.is-execution-overview h2{font-size:20px;margin:6px 0 8px}.is-execution-overview p:not(.is-kicker){color:#a5bac9;font-size:12px;line-height:1.6;max-width:680px}
+.is-execution-overview ol{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px;list-style:none;counter-reset:video-step;padding:0;margin:0}
+.is-execution-overview li{counter-increment:video-step;border:1px solid #314454;border-radius:8px;background:#111d27;padding:13px;color:#d5e5ef;font-size:11px;line-height:1.45}
+.is-execution-overview li::before{content:'0' counter(video-step);display:block;color:#8fb3ca;font-size:10px;letter-spacing:.12em;margin-bottom:8px}
+.is-execution-foot{border-top:1px solid #344654;padding-top:14px;display:flex;align-items:center;justify-content:space-between;gap:14px;color:#9bb2c1;font-size:11px}
+.is-execution-foot button{flex:none;border:1px solid #587891;border-radius:7px;background:#213b4f;color:#dbeef9;padding:8px 11px;font-size:11px}
+@media(max-width:1000px){.is-execution-overview ol{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:600px){.is-execution-overview ol{grid-template-columns:1fr}.is-execution-foot{align-items:flex-start;flex-direction:column}}
 
 /* Project status and workspace administration are opened on demand instead of
    becoming a third grid row beneath the editor on laptop-width screens. */

@@ -22,6 +22,11 @@ const get = async <T>(env: Env, collection: string, recordId: string) => (await 
 const update = async (env: Env, collection: string, recordId: string, data: Record<string, unknown>) => records(env, 'records.update', { collection, recordId, data })
 const create = async (env: Env, collection: string, data: Record<string, unknown>, recordId?: string) => records<{ recordId: string }>(env, 'records.create', { collection, data, recordId })
 const query = async <T>(env: Env, collection: string, where: Record<string, unknown>) => (await records<{ records: Row<T>[]; count: number }>(env, 'records.query', { collection, where, limit: 500 })).records
+const privateMetrics = (status: PrivateStatus) => ({
+  providerPhase: typeof status.phase === 'string' ? status.phase.slice(0, 60) : status.status,
+  providerStartedAt: typeof status.startedAt === 'number' && Number.isFinite(status.startedAt) ? status.startedAt : null,
+  providerFinishedAt: typeof status.finishedAt === 'number' && Number.isFinite(status.finishedAt) ? status.finishedAt : null,
+})
 
 async function notifyExportReady(env: Env, jobId: string, work: WorkflowJob, project: Project): Promise<void> {
   if (work.operation !== 'export' || !project.notifyOnExport) return
@@ -109,19 +114,19 @@ async function handleWorkflow(job: Job, ctx: JobContext, env: Env): Promise<unkn
         // The private service owns idempotency. A restart between POST and this
         // update repeats POST with the same key and must return the same ID.
         providerJobId = await submitPrivateJob(env, jobId, work, ctx.signal)
-        await update(env, 'workflow-jobs', jobId, { providerJobId, status: 'running', progress: 0.02 })
+        await update(env, 'workflow-jobs', jobId, { providerJobId, providerPhase: 'queued', status: 'running', progress: 0.02 })
       }
       status = await getPrivateJob(env, providerJobId, ctx.signal)
     }
     const fresh = await get<WorkflowJob>(env, 'workflow-jobs', jobId)
     if (fresh.data.status === 'cancelled' || ctx.signal.aborted) return { status: 'cancelled' }
     if (status.status === 'failed' || status.status === 'cancelled') {
-      await update(env, 'workflow-jobs', jobId, { status: 'failed', error: status.error?.slice(0, 500) ?? `Private job ${status.status}` })
+      await update(env, 'workflow-jobs', jobId, { status: status.status, ...privateMetrics(status), error: status.error?.slice(0, 500) ?? `Private job ${status.status}` })
       throw new Error(`Private job ${status.status}`)
     }
     if (status.status !== 'succeeded') {
       const progress = Math.min(0.99, Math.max(0, Number(status.progress) || 0))
-      await update(env, 'workflow-jobs', jobId, { status: 'running', progress })
+      await update(env, 'workflow-jobs', jobId, { status: 'running', progress, ...privateMetrics(status) })
       ctx.progress(progress, status.status)
       ctx.continue({ providerJobId: status.id }, { afterMs: 2500 })
       return
@@ -133,7 +138,7 @@ async function handleWorkflow(job: Job, ctx: JobContext, env: Env): Promise<unkn
     }
     const priorAsset = work.operation === 'parse' ? undefined : (await query<Asset>(env, 'assets', { createdByJobId: jobId })).find(a => a.data.projectId === work.projectId)
     if (priorAsset && project.data.currentAssets[assetSlot(work.operation, work.targetId)] === priorAsset.recordId) {
-      await update(env, 'workflow-jobs', jobId, { status: 'succeeded', progress: 1, outputAssetId: priorAsset.recordId, outputVersion: priorAsset.data.version, error: '' })
+      await update(env, 'workflow-jobs', jobId, { status: 'succeeded', progress: 1, outputAssetId: priorAsset.recordId, outputVersion: priorAsset.data.version, error: '', ...privateMetrics(status) })
       await notifyExportReady(env, jobId, work, project.data)
       return { status: 'succeeded', outputAssetId: priorAsset.recordId, outputVersion: priorAsset.data.version }
     }
@@ -173,13 +178,13 @@ async function handleWorkflow(job: Job, ctx: JobContext, env: Env): Promise<unkn
     }
     const currentAssets = { ...again.data.currentAssets, [assetSlot(work.operation, work.targetId)]: assetId }
     await update(env, 'projects', work.projectId, { currentAssets })
-    await update(env, 'workflow-jobs', jobId, { status: 'succeeded', progress: 1, outputAssetId: assetId, outputVersion: version, error: '' })
+    await update(env, 'workflow-jobs', jobId, { status: 'succeeded', progress: 1, outputAssetId: assetId, outputVersion: version, error: '', ...privateMetrics(status) })
     await notifyExportReady(env, jobId, work, again.data)
     ctx.progress(1, 'ready')
     return { status: 'succeeded', outputAssetId: assetId, outputVersion: version }
   } catch (error) {
     const latest = await get<WorkflowJob>(env, 'workflow-jobs', jobId)
-    if (latest.data.status !== 'cancelled') await update(env, 'workflow-jobs', jobId, { status: 'failed', error: String(error).slice(0, 500) })
+    if (latest.data.status !== 'cancelled' && latest.data.status !== 'failed') await update(env, 'workflow-jobs', jobId, { status: 'failed', error: String(error).slice(0, 500) })
     throw error
   }
 }
