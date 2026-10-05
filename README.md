@@ -21,10 +21,11 @@ npm run test:unit
 npm run lint
 npx deepspace auth whoami --json
 npx deepspace auth login       # only if signed out; complete in your browser
+npx deepspace app init         # register this app and mint its immutable ID
 npx deepspace dev start
 ```
 
-The first `dev start` registers an immutable app ID to the logged-in DeepSpace account. Confirm that this is the intended owner before running it. `vite build` also needs that server-minted ID; do not replace `__APP_ID__` by hand. Local tests use an unmistakable test-only sentinel without registering an app.
+`app init` registers the app under the logged-in account and writes its immutable ID to `wrangler.toml`; check `auth whoami` first. It does not select the app's permanent source. `dev start` runs the local Vite and Worker stack after registration. `vite build` needs the server-minted ID; do not replace `__APP_ID__` by hand. Local tests use an unmistakable test-only sentinel without registering an app.
 
 To connect the private engine, configure `PRIVATE_WORKFLOW_URL` and `PRIVATE_WORKFLOW_TOKEN` in the [DeepSpace encrypted secrets store](https://docs.deep.space/guides/secrets). The URL must be HTTPS outside localhost. The token must match the private adapter; never add it to `VITE_` variables, source control, logs, or a browser request. The separate private adapter runs from the owner's private environment and imports the existing Illustory engine without copying it here. Its source and data directory are intentionally outside this repository.
 

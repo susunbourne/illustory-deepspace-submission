@@ -29,13 +29,13 @@ npm run lint             # passed
 python -m pytest -q -p no:cacheprovider test_contract.py  # 6 passed, 1 dependency warning
 ```
 
-`npm run build` currently refuses the scaffold placeholder `__APP_ID__`; the official CLI reports `not_authenticated`. The DeepSpace skill explicitly requires the server to mint the ID after the intended owner logs in. No ID was fabricated. `npx deepspace dev start`, login/browser interaction, persistence across reload, multi-user integration, live media and paid one-shot rendering have not been verified.
+`npm run build` currently refuses the scaffold placeholder `__APP_ID__`; the official CLI reports `not_authenticated`. After logging in as the intended owner, run `npx deepspace app init` to mint and write the ID; `dev start` does not register the app. No ID was fabricated. `npx deepspace dev start`, login/browser interaction, persistence across reload, multi-user integration, live media and paid one-shot rendering have not been verified.
 
 `npm audit` reports four high advisories in the build-only route generator dependency chain (`@generouted/react-router` → `fast-glob` → `micromatch` → `braces`) with no upstream fix published, and one low advisory in `esbuild`'s Windows development server. `npm audit --omit=dev` reports only that low `esbuild` advisory. No vulnerable service endpoint is intentionally exposed by the app, and this repository has not been deployed; recheck advisories before release.
 
 ## Next verification gate
 
-1. Intended owner runs `npx deepspace auth login` in the new repository, confirms `auth whoami`, then `npx deepspace dev start`. This registers an app ID but does not push or deploy.
+1. Intended owner runs `npx deepspace auth login` in the new repository, confirms `auth whoami`, then `npx deepspace app init` and `npx deepspace dev start`. App init registers an ID but does not push or deploy or latch source.
 2. In the browser, create a workspace and project, refresh, then verify the records survive. Use four test users to exercise owner/editor/reviewer/viewer with direct API attempts in addition to hidden controls.
 3. Configure the private adapter in the owner's private environment and expose it through an authenticated HTTPS ingress. Put URL/token in the DeepSpace encrypted secrets store; restart dev. Do not copy those values into this repository.
 4. After setting an approved cost ceiling, run one short script/one shot from parse through export. Record job IDs, revisions, asset hashes, error outcomes, timing and actual bills. Then deliberately edit during a running job and cancel one to verify stale/cancel behavior in the live runtime.
