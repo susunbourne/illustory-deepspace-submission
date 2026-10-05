@@ -9,6 +9,11 @@
 .is-shot-characters small{width:100%}.is-shot-characters label{display:flex;align-items:center;gap:5px;cursor:pointer}.is-shot-characters input,.is-email-settings input{width:auto;accent-color:#a8d7f4}
 .is-email-settings label{display:flex;align-items:center;gap:8px;font-size:12px;color:#cfe2ef}.is-email-settings small{line-height:1.4}
 .is-shot-content>label:has(textarea),.is-shot-content>label:has(select){display:grid;gap:6px;align-items:initial}.is-shot-content>label:has(textarea) textarea,.is-shot-content>label:has(select) select{width:100%}
+.is-card-body details,.is-shot-content details{border:1px solid #2b3946;border-radius:7px;padding:10px;background:#111a23}
+.is-card-body summary,.is-shot-content summary{cursor:pointer;color:#bdd5e6;font-size:12px;font-weight:600}
+.is-card-body details label,.is-shot-content details label{display:grid;gap:5px;margin-top:10px;color:#96a9b8;font-size:11px}
+.is-beat-editor{border-top:1px solid #2a3946;margin-top:10px;padding-top:10px;display:grid;grid-template-columns:minmax(0,2fr) repeat(3,minmax(75px,1fr));gap:9px}
+@media(max-width:1000px){.is-beat-editor{grid-template-columns:repeat(2,minmax(0,1fr))}}
 
 /* Project status and workspace administration are opened on demand instead of
    becoming a third grid row beneath the editor on laptop-width screens. */

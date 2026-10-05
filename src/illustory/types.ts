@@ -3,17 +3,22 @@ export type Operation = 'parse' | 'character' | 'scene-anchor' | 'voice' | 'firs
 export type TargetType = 'project' | 'character' | 'scene' | 'shot'
 export type JobStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled' | 'stale'
 
-export interface Character { id: string; name: string; description: string; appearance?: Record<string, string>; voiceId?: string }
+export interface Character {
+  id: string; name: string; description: string; nameEn?: string; personality?: string
+  appearance?: Record<string, string>; voiceId?: string; referenceImagePath?: string; loraUrl?: string
+}
 export interface Beat { id: string; description: string; durationSeconds: number; speaker?: string; dialogue?: string }
+export interface CharacterEmotion { characterId: string; emotion: 'tense' | 'melancholy' | 'fearful' | 'determined' | 'neutral' }
 export interface Shot {
   id: string; title: string; description: string; durationSeconds: number
   characters?: string[]; shotType?: string; cameraAngle?: string; timeOfDay?: string
+  location?: string; action?: string; environmentDetails?: string; emotions?: CharacterEmotion[]
   dialogue?: string; speaker?: string; narration?: string; beats?: Beat[]
   referenceVideo?: { title: string; url: string }
   trimStartSeconds?: number; trimEndSeconds?: number
 }
-export interface Scene { id: string; title: string; description: string; shots: Shot[] }
-export interface Storyboard { characters: Character[]; scenes: Scene[] }
+export interface Scene { id: string; title: string; description: string; sceneVisualAnchor?: string; shots: Shot[] }
+export interface Storyboard { title?: string; chapter?: string; characters: Character[]; scenes: Scene[] }
 export interface VideoReference { title: string; url: string; thumbnail?: string }
 export interface Workspace { [key: string]: unknown; name: string; ownerId: string }
 export interface Membership { [key: string]: unknown; workspaceId: string; userId: string; role: WorkspaceRole; status: 'active' | 'suspended' }

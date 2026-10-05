@@ -4,7 +4,8 @@ import type { Asset, Membership, Project, Row, WorkflowJob, Workspace } from './
 import { assetSlot } from './illustory/types'
 import { validStoryboard } from './illustory/validation'
 import { getPrivateJob, submitPrivateJob, storeCatalogAsset, verifyPrivateAsset, type PrivateStatus } from './illustory/private-workflow'
-import { chatText, characterImagePrompt, parseStoryboard, sceneImagePrompt, scriptMessages, SCRIPT_MODEL, voiceText } from './illustory/creative'
+import { chatText, SCRIPT_MODEL, voiceText } from './illustory/creative'
+import { characterMessages, sceneMessages, parseCharacterBible, parseOriginalStoryboard, originalCharacterImagePrompt, originalSceneImagePrompt } from './illustory/original-creative'
 import { generateCatalogImage, generateCatalogVoice } from './illustory/catalog'
 
 async function records<T>(env: Env, tool: string, params: Record<string, unknown>): Promise<T> {
@@ -75,15 +76,17 @@ async function handleWorkflow(job: Job, ctx: JobContext, env: Env): Promise<unkn
         const board = work.request.storyboard
         if (work.operation === 'parse') {
           if (typeof script !== 'string' || !script.trim() || script.length > 20_000) throw new Error('Script must contain 1–20,000 characters for parsing')
-          const raw = await call('openai/chat-completion', { model: SCRIPT_MODEL, max_tokens: 4000, messages: scriptMessages(script) })
-          status = { id: jobId, status: 'succeeded', progress: 1, result: { storyboard: parseStoryboard(chatText(raw)) } }
+          const characterRaw = await call('openai/chat-completion', { model: SCRIPT_MODEL, max_tokens: 5000, messages: characterMessages(script) })
+          const characters = parseCharacterBible(chatText(characterRaw))
+          const sceneRaw = await call('openai/chat-completion', { model: SCRIPT_MODEL, max_tokens: 16000, messages: sceneMessages(script, characters) })
+          status = { id: jobId, status: 'succeeded', progress: 1, result: { storyboard: parseOriginalStoryboard(chatText(sceneRaw), characters) } }
         } else {
           if (!validStoryboard(board)) throw new Error('Invalid frozen storyboard')
           let media: string
           if (work.operation === 'character' || work.operation === 'voice') {
             const character = board.characters.find(c => c.id === work.targetId)
             if (!character) throw new Error('Character no longer exists in the frozen storyboard')
-            if (work.operation === 'character') media = await generateCatalogImage(call, characterImagePrompt(character), ctx.signal)
+            if (work.operation === 'character') media = await generateCatalogImage(call, originalCharacterImagePrompt(character), ctx.signal)
             else {
               const options = work.request.options && typeof work.request.options === 'object' ? work.request.options as Record<string, unknown> : {}
               const line = typeof options.text === 'string' ? options.text.trim() : voiceText(board, character)
@@ -93,7 +96,7 @@ async function handleWorkflow(job: Job, ctx: JobContext, env: Env): Promise<unkn
           } else {
             const scene = board.scenes.find(s => s.id === work.targetId)
             if (!scene) throw new Error('Scene no longer exists in the frozen storyboard')
-            media = await generateCatalogImage(call, sceneImagePrompt(scene), ctx.signal)
+            media = await generateCatalogImage(call, originalSceneImagePrompt(scene), ctx.signal)
           }
           const asset = await storeCatalogAsset(env, jobId, work.projectId, media, ctx.signal)
           status = { id: jobId, status: 'succeeded', progress: 1, result: { asset } }

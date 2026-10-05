@@ -15,7 +15,7 @@ The original Git root had 136 pre-existing status entries at the start and still
 | DeepSpace auth shell and protected Studio | `src/pages/(app)/_layout.tsx`, `studio.tsx`, `worker.ts` | Registered and started locally; test-account browser flow passed |
 | Workspace/project/storyboard and role checks | `src/actions/index.ts`, `src/schemas/illustory-schemas.ts` | Unit and four-account browser tests passed |
 | Durable job and asset version control | `src/jobs.ts`, `src/illustory/private-workflow.ts` | Unit tested; external provider not exercised |
-| DeepSpace Catalog integrations | `src/illustory/creative.ts`, `src/illustory/catalog.ts`, `src/integrations.ts` | OpenAI parse/images, ElevenLabs voices/speech, YouTube research, Email export notice wired; offline checks only |
+| DeepSpace Catalog integrations | `src/illustory/original-creative.ts`, `src/illustory/creative.ts`, `src/illustory/catalog.ts`, `src/integrations.ts` | Two-stage original Character Bible and scene/shot parsing, original character/scene image prompts, ElevenLabs voices/speech, YouTube research, Email export notice wired; offline checks only |
 | Private media proxy and access check | `src/server/illustory-routes.ts` | Code and private range contract tested |
 | Existing-engine bridge | Private adapter `bridge.py` outside repo | Auth/idempotency/restart/path tests pass; model/GPU path unverified |
 | Reviewer-facing UI | `studio.tsx`, `studio.css`, `src/pages/index.tsx` | Build and browser smoke passed; owner identified a narrow-layout issue, now corrected and role-browser tested; full stage review pending |
@@ -24,7 +24,7 @@ Commands and observed results:
 
 ```sh
 npm run type-check       # passed
-npm run test:unit        # 24 tests passed
+npm run test:unit        # 30 tests passed
 npm run lint             # passed
 npm run build            # passed after official app init
 npx deepspace test run smoke --port 5174                # 6 passed
@@ -45,7 +45,7 @@ The owner signed in to the CLI and official `app init` minted this checkout's ID
 
 ## Cost planning
 
-One representative run needs one Catalog text parse, two Catalog image operations, one private reference-conditioned first frame, one ElevenLabs voice list and short speech synthesis, one YouTube search, one H3 render, optional SeedVR2, and FFmpeg. Optional Email is one request. Catalog list/search/mail base prices shown by the current CLI are $0.004, $0.013, and $0.013 respectively (free-tier rates, subject to account status). Speech is $0.0002 per character at the displayed free-tier rate. OpenAI calls vary with tokens. Actual total is:
+One representative run needs two Catalog text parse calls, two Catalog image operations, one private reference-conditioned first frame, one ElevenLabs voice list and short speech synthesis, one YouTube search, one H3 render, optional SeedVR2, and FFmpeg. Optional Email is one request. Catalog list/search/mail base prices shown by the current CLI are $0.004, $0.013, and $0.013 respectively (free-tier rates, subject to account status). Speech is $0.0002 per character at the displayed free-tier rate. OpenAI calls vary with tokens. Actual total is:
 
 `OpenAI text/image tokens × account rates + speech characters × rate + fixed search/list/mail calls + original first-frame provider cost + Vast instance hourly price × occupied hours + storage/egress`.
 
@@ -57,6 +57,6 @@ Recommend a **new GitHub repository containing only this review code** and choos
 
 ## Portal note draft — edit after hands-on verification
 
-> I built Illustory Studio, a workspace-based film production app that turns a script into an editable storyboard, versioned character/scene/shot assets, voiced H3 motion, optional enhancement, and a final cut. DeepSpace provides authentication, RecordRoom persistence, JobRoom background work, and encrypted server secrets. Its Catalog provides OpenAI parsing and visual references, ElevenLabs voice selection and speech, optional YouTube reference research, and optional export email. I kept reference-conditioned first-frame, tuned GPU motion and FFmpeg execution in my private Illustory service because the Catalog image endpoint cannot accept my existing visual references and the H3/ComfyUI workflow is proprietary. The coding agent implemented the DeepSpace adaptation, public data and prompt contracts, private adapter boundary, UI and tests; I personally verified **[replace with actual login, role, one-shot generation, export and online evidence after running them]**. **[State any remaining external-stage limitation honestly.]**
+> I built Illustory Studio, a workspace-based film production app that turns a script into an editable storyboard, versioned character/scene/shot assets, voiced H3 motion, optional enhancement, and a final cut. DeepSpace provides authentication, RecordRoom persistence, JobRoom background work, and encrypted server secrets. Its Catalog provides OpenAI parsing and visual references, ElevenLabs voice selection and speech, optional YouTube reference research, and optional export email. I disclosed my original two-stage Character Bible and scene/shot rules, full storyboard fields and character/scene image prompts in this repository. I kept reference-conditioned first frames, tuned GPU motion and FFmpeg execution in my private Illustory service because the Catalog image endpoint cannot accept my existing visual references and the H3/ComfyUI execution workflow is proprietary. The coding agent implemented the DeepSpace adaptation, public prompt/data contracts, private adapter boundary, UI and tests; I personally verified **[replace with actual login, role, one-shot generation, export and online evidence after running them]**. **[State any remaining external-stage limitation honestly.]**
 
 This draft is not ready to paste into the portal until the bracketed personal verification and live URL/repository fields are real.

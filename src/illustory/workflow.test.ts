@@ -3,6 +3,7 @@ import { actions } from '../actions'
 import { runJob } from '../jobs'
 import type { Project, WorkflowJob } from './types'
 import { validStoryboard } from './validation'
+import { characterReply, sceneReply } from './original-creative.test'
 
 const enqueueJob = vi.hoisted(() => vi.fn(async () => 'queue-1'))
 const integrationCall = vi.hoisted(() => vi.fn())
@@ -239,8 +240,8 @@ describe('result publication', () => {
     expect(r.get('workflow-jobs', 'j')?.data.status).toBe('succeeded')
   })
   it('does not apply a parsed storyboard twice after a status-write interruption', async () => {
-    const board = project().storyboard
-    integrationCall.mockResolvedValue({ choices: [{ message: { content: JSON.stringify(board) } }] })
+    integrationCall.mockResolvedValueOnce({ choices: [{ message: { content: JSON.stringify(characterReply) } }] })
+      .mockResolvedValueOnce({ choices: [{ message: { content: JSON.stringify(sceneReply) } }] })
     const r = seeded(); r.insert('workflow-jobs', 'j', { ...job('parse'), targetType: 'project', targetId: 'p' }); r.failNextJobSuccess = true
     r.get('projects', 'p')!.data.currentAssets = { 'character:c': 'old-image' }
     await expect(run(r)).rejects.toThrow('Simulated Worker interruption')
@@ -249,7 +250,7 @@ describe('result publication', () => {
     await run(r)
     expect(r.get('projects', 'p')?.data.revision).toBe(2)
     expect(r.get('workflow-jobs', 'j')?.data.outputVersion).toBe(2)
-    expect(integrationCall).toHaveBeenCalledTimes(1)
+    expect(integrationCall).toHaveBeenCalledTimes(2)
   })
   it('publishes a catalog voice through private storage once', async () => {
     const data = btoa('a'.repeat(200))

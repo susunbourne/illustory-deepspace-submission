@@ -14,7 +14,7 @@ const roles: WorkspaceRole[] = ['owner', 'editor', 'reviewer', 'viewer']
 const operations: Operation[] = ['parse', 'character', 'scene-anchor', 'voice', 'first-frame', 'h3', 'seedvr2', 'export']
 const targetFor: Record<Operation, TargetType> = { parse: 'project', character: 'character', 'scene-anchor': 'scene', voice: 'character', 'first-frame': 'shot', h3: 'shot', seedvr2: 'shot', export: 'project' }
 const catalogOperations: Operation[] = ['parse', 'character', 'scene-anchor', 'voice']
-const productionPlan = (board: Storyboard) => JSON.stringify({ characters: board.characters, scenes: board.scenes.map(s => ({
+const productionPlan = (board: Storyboard) => JSON.stringify({ title: board.title, chapter: board.chapter, characters: board.characters, scenes: board.scenes.map(s => ({
   ...s, shots: s.shots.map(({ trimStartSeconds: _start, trimEndSeconds: _end, ...shot }) => shot),
 })) })
 
