@@ -171,7 +171,8 @@ describe('workspace authorization and revisions', () => {
   it('changes export email preference without invalidating an in-flight creative revision', async () => {
     const r = seeded()
     expect((await invoke(r, 'setExportNotification', 'viewer', { projectId: 'p', enabled: true })).success).toBe(false)
-    expect((await invoke(r, 'setExportNotification', 'editor', { projectId: 'p', enabled: true })).success).toBe(true)
+    expect((await invoke(r, 'setExportNotification', 'editor', { projectId: 'p', enabled: true })).success).toBe(false)
+    expect((await invoke(r, 'setExportNotification', 'owner', { projectId: 'p', enabled: true })).success).toBe(true)
     expect(r.get('projects', 'p')?.data.notifyOnExport).toBe(true)
     expect(r.get('projects', 'p')?.data.revision).toBe(1)
   })
@@ -274,19 +275,33 @@ describe('result publication', () => {
     await run(r)
     expect(integrationCall).toHaveBeenCalledTimes(1)
   })
-  it('records one optional email after export without altering a published video', async () => {
+  it('emails the active workspace owner once when a reviewer exports', async () => {
     privateResponse('succeeded', 'video/mp4')
     integrationCall.mockResolvedValue({ id: 'mail-1' })
     const r = seeded()
     r.emailFrom = 'studio@example.com'
     r.get('projects', 'p')!.data.notifyOnExport = true
     r.insert('users', 'owner', { email: 'owner@example.com' })
-    r.insert('workflow-jobs', 'j', { ...job('export'), targetType: 'project', targetId: 'p' })
+    r.insert('users', 'reviewer', { email: 'reviewer@example.com' })
+    r.insert('workflow-jobs', 'j', { ...job('export'), targetType: 'project', targetId: 'p', requestedByUserId: 'reviewer' })
     await run(r)
     expect(r.get('workflow-jobs', 'j')?.data.status).toBe('succeeded')
     expect(r.get('workflow-jobs', 'j')?.data.notificationStatus).toBe('sent')
     expect(integrationCall).toHaveBeenCalledWith('email/send', expect.objectContaining({ to: 'owner@example.com' }))
     await run(r)
     expect(integrationCall).toHaveBeenCalledTimes(1)
+  })
+  it('keeps the export but does not email a former owner', async () => {
+    privateResponse('succeeded', 'video/mp4')
+    const r = seeded()
+    r.emailFrom = 'studio@example.com'
+    r.get('projects', 'p')!.data.notifyOnExport = true
+    r.get('memberships', 'owner')!.data.status = 'suspended'
+    r.insert('users', 'owner', { email: 'owner@example.com' })
+    r.insert('workflow-jobs', 'j', { ...job('export'), targetType: 'project', targetId: 'p', requestedByUserId: 'reviewer' })
+    await run(r)
+    expect(r.get('workflow-jobs', 'j')?.data.status).toBe('succeeded')
+    expect(r.get('workflow-jobs', 'j')?.data.notificationStatus).toBe('failed')
+    expect(integrationCall).not.toHaveBeenCalled()
   })
 })

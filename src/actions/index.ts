@@ -122,8 +122,8 @@ const saveProject: ActionHandler<Env> = async ctx => {
 }
 const setExportNotification: ActionHandler<Env> = async ctx => {
   const id = str(ctx.params.projectId, 100)
-  const p = id && await projectAccess(ctx, id, ['owner', 'editor'])
-  if (!p) return fail('Edit permission required', 'forbidden')
+  const p = id && await projectAccess(ctx, id, ['owner'])
+  if (!p) return fail('Owner required to change export notifications', 'forbidden')
   if (typeof ctx.params.enabled !== 'boolean') return fail('Invalid notification setting')
   const r = await ctx.tools.update('projects', p.recordId, { notifyOnExport: ctx.params.enabled })
   return r.success ? ok({ recordId: p.recordId, data: { ...p.data, notifyOnExport: ctx.params.enabled } }) : r

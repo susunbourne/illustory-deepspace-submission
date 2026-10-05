@@ -6,7 +6,7 @@ An authenticated, workspace-scoped production control plane for one short-video 
 
 ## Why this split
 
-DeepSpace owns sign-in, the app Worker, persistent workspace/project/job/asset metadata through RecordRoom, a durable JobRoom, and four useful Catalog integrations. OpenAI parses the script and generates character/scene references. ElevenLabs supplies selectable voices and speech audio. YouTube provides three optional visual references from the title and synopsis. Email can notify the signed-in requester after a successful export. The original private Illustory service performs reference-conditioned shot first frames, Vast/ComfyUI H3, optional SeedVR2, private binary storage, and FFmpeg. The browser never receives the private service token.
+DeepSpace owns sign-in, the app Worker, persistent workspace/project/job/asset metadata through RecordRoom, a durable JobRoom, and four useful Catalog integrations. OpenAI parses the script and generates character/scene references. ElevenLabs supplies selectable voices and speech audio. YouTube provides three optional visual references from the title and synopsis. Email can notify the active workspace owner after a successful export, even when a reviewer requested it. The original private Illustory service performs reference-conditioned shot first frames, Vast/ComfyUI H3, optional SeedVR2, private binary storage, and FFmpeg. The browser never receives the private service token.
 
 The [Catalog endpoints](https://docs.deep.space/guides/external-apis) used in code are `openai/chat-completion`, `openai/generate-image`, `elevenlabs/list-voices`, `elevenlabs/generate-speech`, `youtube/search-videos`, and `email/send`. Their current input/output contracts were checked using `npx deepspace integrations info ... --json`; paid responses still need live confirmation. Auth, RecordRoom, JobRoom and encrypted secrets are **SDK/platform primitives**, not Catalog integrations. The private Illustory engine is an **owner-operated external service**, not a DeepSpace integration. The Catalog's text-to-image endpoint cannot accept the existing character/scene images as reference inputs, so the original private image-edit path remains responsible for coherent shot first frames.
 
@@ -36,7 +36,7 @@ To connect the private engine, configure `PRIVATE_WORKFLOW_URL` and `PRIVATE_WOR
 3. The owner requests parsing. `requestJob` pins the revision and snapshot, records an idempotency key, and enqueues a DeepSpace background job. A Catalog OpenAI call returns structured characters/scenes/shots; the Worker validates them and publishes only if the project revision is still current. The title/synopsis can also trigger an optional YouTube reference search; links can be attached to shots as research metadata.
 4. Editors adjust the storyboard. A save increments the revision. Owners generate character and scene reference images through the Catalog. The Worker copies their bytes to the protected private media store and publishes versioned metadata. Owners may choose an ElevenLabs voice ID and generate a speech asset for a character. The selected audio is part of the later H3 input snapshot.
 5. The owner asks the private engine for a first frame conditioned on the selected references, then H3 and optionally SeedVR2. The private service retains large binaries. Before publishing a version, the Worker verifies the private file exists and matches SHA-256 and byte size. Reviewers or owners can select a version.
-6. Editors set trims. An owner or reviewer requests export; the private service uses selected clips and FFmpeg. The browser reads assets through a workspace-authorized proxy with range support for video. If export mail is enabled, the Catalog Email endpoint sends a completion note; a mail failure is recorded without changing export success.
+6. Editors set trims. An owner or reviewer requests export; the private service uses selected clips and FFmpeg. The browser reads assets through a workspace-authorized proxy with range support for video. If the owner enables export mail, the Catalog Email endpoint sends a completion note to the active workspace owner's account email. A mail failure is recorded without changing export success.
 
 The Studio refreshes authorized job and asset state every three seconds. Browser WebSocket routes are closed because the scaffold's rooms do not provide workspace-level authorization; JobRoom remains a DeepSpace background primitive. A server action filters reads by current workspace membership. Collection-level direct client reads/writes are denied for product data.
 
@@ -49,6 +49,7 @@ The Studio refreshes authorized job and asset state every three seconds. Browser
 | Submit billable AI/GPU generation | Yes | No | No | No |
 | Request deterministic FFmpeg export | Yes | No | Yes | No |
 | Select an asset version | Yes | No | Yes | No |
+| Enable export email to the workspace owner | Yes | No | No | No |
 | Manage membership / cancel jobs | Yes | No | No | No |
 
 These checks live in `src/actions/index.ts` and `src/server/illustory-routes.ts`; hiding controls in React is only a UX aid.

@@ -1,6 +1,6 @@
 import { buildCronContext, type Job, type JobContext } from 'deepspace/worker'
 import type { Env } from '../worker'
-import type { Asset, Project, Row, WorkflowJob } from './illustory/types'
+import type { Asset, Membership, Project, Row, WorkflowJob, Workspace } from './illustory/types'
 import { assetSlot } from './illustory/types'
 import { validStoryboard } from './illustory/validation'
 import { getPrivateJob, submitPrivateJob, storeCatalogAsset, verifyPrivateAsset, type PrivateStatus } from './illustory/private-workflow'
@@ -34,13 +34,18 @@ async function notifyExportReady(env: Env, jobId: string, work: WorkflowJob, pro
   // but never retries an ambiguous send and mails the reviewer twice.
   await update(env, 'workflow-jobs', jobId, { notificationStatus: 'attempted' })
   try {
-    const user = await get<{ email?: string }>(env, 'users', work.requestedByUserId)
+    const workspace = await get<Workspace>(env, 'workspaces', work.workspaceId)
+    if (project.workspaceId !== work.workspaceId) throw new Error('Export workspace does not match the project')
+    const ownerId = workspace.data.ownerId
+    const owners = await query<Membership>(env, 'memberships', { workspaceId: work.workspaceId, userId: ownerId, role: 'owner', status: 'active' })
+    if (!owners.length) throw new Error('Workspace owner is no longer active')
+    const user = await get<{ email?: string }>(env, 'users', ownerId)
     const email = user.data.email
-    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error('Signed-in user has no usable email address')
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) throw new Error('Workspace owner has no usable email address')
     const catalog = buildCronContext(env, env.OWNER_USER_ID, `app:${env.DEEPSPACE_APP_ID}`)
     await catalog.integrations.call('email/send', { from: env.EMAIL_FROM, to: email,
-      subject: 'Your Illustory export is ready',
-      text: `The export for ${project.title} is ready. Sign in to https://${env.APP_NAME}.app.space/studio to review it.` })
+      subject: 'Illustory export is ready',
+      text: `The export for ${project.title} is ready. Job ID: ${jobId}. Sign in to https://${env.APP_NAME}.app.space/studio to review it.` })
     await update(env, 'workflow-jobs', jobId, { notificationStatus: 'sent', notificationError: '' })
   } catch (error) {
     await update(env, 'workflow-jobs', jobId, { notificationStatus: 'failed', notificationError: String(error).slice(0, 300) })
