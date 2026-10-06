@@ -1,99 +1,115 @@
-# Implementation and engineering review
+# Architecture
 
-## Customer deployment brief
+## Product boundary
 
-**Assumption, not a known customer fact:** the first buyer is a 20–50 person short-video studio. Writers draft scripts; editors refine a shot list; a producer approves paid generation; reviewers select versions; delivery staff export a cut. A wrong result wastes GPU/API spend and editorial time; an unauthorized read exposes unreleased creative IP. The studio may already use Microsoft Entra and Azure Blob through the original Illustory development deployment. Expected pilot load is a few projects and tens of generation requests per day, with minutes-long GPU jobs. No customer-specific SLO, data residency, budget, or quality rubric has been supplied. This exercise should not assert production readiness.
+Illustory is for a creative team working from one shared production plan.
+The writer/editor shapes the story; the workspace owner authorizes generation;
+a reviewer selects versions and requests delivery. This adaptation reuses the
+original product's creative rules and private rendering service.
 
-## Source reconstruction and trust boundaries
+**Pilot assumption:** a small studio with a few projects and one active editor
+per project. A 20–50-person team is a planning scenario, not a claim about a
+customer deployment. Actual traffic, availability requirements and operating
+costs have not been measured at that scale.
 
-The original Illustory source is a FastAPI app with a browser UI, Entra-based production auth, PostgreSQL metadata, workspace RBAC, leased generation jobs, versioned assets, Azure Blob, an OpenAI-backed parser/image path, Vast/ComfyUI H3 and SeedVR2 providers, and FFmpeg composition. The original engine is private and has not been copied. Its Azure deployment is described in its own README as a development environment with remaining production gates.
+## Runtime
 
-```text
-Browser
-  ├─ DeepSpace Auth → verified JWT
-  └─ protected Studio → server actions (Bearer JWT)
-       ├─ membership check on every workspace/project/asset operation
-       ├─ DeepSpace RecordRoom: workspaces, memberships, projects, jobs, assets
-       ├─ DeepSpace JobRoom: durable orchestration and checkpoints
-       │     ├─ OpenAI Responses: strict screenplay structure (server secret)
-       │     ├─ Catalog OpenAI: character/scene images
-       │     ├─ Catalog ElevenLabs: voice list + selected speech
-       │     └─ HTTPS + private bearer secret → owner-operated private adapter
-                   ├─ Azure PostgreSQL idempotency ledger + private Blob media
-                   └─ imports original Illustory RealPipeline / ComposerService
-                         ├─ reference-conditioned first frame
-                         ├─ Vast GPU / ComfyUI H3 and SeedVR2
-                         └─ FFmpeg trims and export
-       ├─ Catalog YouTube: optional top-three reference search
-       └─ Catalog Email: optional export-ready notice
+```mermaid
+flowchart TD
+  UI[Studio browser] -->|Verified identity| Actions[DeepSpace server actions]
+  Actions -->|Membership and role checks| Records[RecordRoom]
+  Actions --> Jobs[JobRoom]
+  Jobs --> Parse[OpenAI Responses: strict parse]
+  Jobs --> Catalog[DeepSpace Catalog: images and speech]
+  Actions --> Research[DeepSpace Catalog: YouTube search]
+  Jobs -->|Server bearer token| Adapter[Private Azure adapter]
+  Adapter --> Ledger[PostgreSQL job ledger]
+  Adapter --> Blob[Private Blob media]
+  Adapter --> GPU[Vast / ComfyUI H3]
+  Adapter --> FFmpeg[FFmpeg export]
+  UI -->|Verified identity| Media[Workspace-authorized media proxy]
+  Media --> Adapter
 ```
 
-Trust boundaries: the browser cannot reach the private adapter or read its token; RecordRoom product collections deny direct client access; server actions use app-level record tools only after checking workspace membership; the media proxy checks membership before forwarding file bytes. Browser WebSocket routes and generic browser Catalog integration routes are closed. Catalog calls occur only behind role-checked actions or jobs. The private adapter authenticates the Worker bearer token, rejects key traversal, validates replay hashes and keeps binaries off the public app scope. Operator-controlled environment variables and DeepSpace secrets hold service credentials.
+The media route proxies through the adapter; the browser receives no Blob
+credential or private-service token. Product collections deny direct client
+access. Server actions use platform record tools only after membership checks.
+Generic browser Catalog and WebSocket routes are closed. Studio refreshes jobs
+and assets every three seconds, rather than claiming collaborative text sync.
 
-## Actual data and control flow
+## Data model
 
-1. `src/actions/index.ts` creates a project with a script, empty storyboard, revision 1 and workspace ID. Each edit requires owner/editor membership and an expected revision.
-2. The owner submits a job. The action validates operation/target/dependencies, derives a deterministic job record ID from the project and idempotency key, copies selected asset metadata into an input snapshot, persists a `workflow-jobs` row, and enqueues `illustory-workflow` in JobRoom. Concurrent requests for the same key converge on the same row.
-3. For parse, character images, scene anchors or speech, `src/jobs.ts` calls the relevant DeepSpace Catalog endpoint. Parsing first builds a Character Bible and then supplies it to the scene/shot pass, with the original Illustory system/shot rules and field contract. The Worker validates both JSON results strictly and retains appearance, anchors, first-frame action, local environment, motion beats, emotions and dialogue. Image/audio data URIs are checksum-verified and copied to the protected private adapter. The job records Catalog intent before billing and checkpoints its result before publication. No automatic Catalog retry can create a duplicate bill after an ambiguous crash.
-4. For first frame, H3, SeedVR2 and export, `src/jobs.ts` POSTs the snapshot to the private adapter with the same key, saves its stable ID, polls with `ctx.continue`, and updates user-visible job state. A Worker restart may replay POST safely because the private adapter enforces idempotency. The adapter imports the original reference-conditioned image, GPU and composition pipeline. It maps the full public storyboard fields into the original domain records, writes binaries to private Azure Blob storage and returns a relative storage key, hash, size and MIME type. Older private parser snapshots remain a compatibility path.
-5. The Worker re-reads project revision and cancellation status. For media it also checks HEAD hash/size before creating an immutable asset version. It selects the new version only while the input revision is current. A failed, cancelled or stale job does not select an asset.
-6. The Studio polls authorized actions every three seconds. Images use authenticated asset fetches; video streams through a same-origin, membership-checked route that supports Range.
+| Record | Purpose |
+|---|---|
+| `workspaces`, `memberships` | Workspace identity and active user roles |
+| `projects` | Script, editable storyboard, revision and selected asset IDs |
+| `workflow-jobs` | Frozen inputs, requester, idempotency key, provider ID, status and result |
+| `assets` | Version, originating job/revision, private storage key, MIME type, byte size and SHA-256 |
 
-## State and dependencies
+The [TypeScript domain](../src/illustory/types.ts), [persistent collections](../src/schemas/illustory-schemas.ts)
+and [model output schema](../src/illustory/structured-output.ts) serve different
+boundaries. `original-creative.ts` validates and maps model output into the editor
+model. It preserves appearance, scene anchors, static first-frame action, local
+environment, motion beats, emotions and dialogue.
 
-DeepSpace RecordRoom holds persistent workspace membership, projects, scripts, storyboards, job metadata and asset version metadata. JobRoom holds queue/checkpoint state. The Azure private adapter uses the original PostgreSQL cluster for an independent idempotency ledger and private Azure Blob for media; its local test mode uses SQLite. Its engine imports the original source and uses owner-operated credentials for reference-conditioned first frames, GPU motion, enhancement and export. The browser has only transient edit drafts and object URLs. The public repository contains reviewable script and image prompts, but no proprietary H3/ComfyUI prompt assembly or workflow, customer script, generated binary, or private credential.
+## One generation request
 
-## Acceptance evidence and known gaps
+1. An action verifies identity, spending approval, workspace role, target and
+   required source assets. It checks the expected project revision.
+2. It stores the frozen script/storyboard and selected asset metadata under a
+   stable job ID, then enqueues the job in DeepSpace JobRoom.
+3. Parsing makes two direct OpenAI Responses calls: Character Bible, then scenes
+   and shots. Images/speech use Catalog. First frames, H3 and export go through
+   the private API with a stable idempotency key.
+4. The job runner checkpoints state and polls private work with `ctx.continue`.
+   Catalog intent is recorded before calling the provider; an ambiguous result
+   is not automatically billed again.
+5. Before publishing, it checks the result, private file metadata, current project
+   revision and cancellation state. It creates a version and selects the result
+   only while the revision is current. See the concurrency limitation below.
+6. The UI reads authorized status and media. Export email failure is recorded
+   separately and does not invalidate the video.
 
-| Criterion | Current evidence | Classification |
+[Server actions](../src/actions/index.ts) · [Job runner](../src/jobs.ts) · [Private client](../src/illustory/private-workflow.ts)
+
+## Roles
+
+| Action | Owner | Editor | Reviewer | Viewer |
+|---|---|---|---|---|
+| View workspace data | Yes | Yes | Yes | Yes |
+| Create/edit project or storyboard | Yes | Yes | No | No |
+| Generate, search references, load voices | Yes | No | No | No |
+| Select asset version / export | Yes | No | Yes | No |
+| Manage members, cancel jobs, enable export mail | Yes | No | No | No |
+
+Sponsored actions also require app-owner spending approval. Becoming a workspace
+owner does not grant credits. [Spending controls](SPENDING_ACCESS.md).
+
+## Decisions
+
+| Decision | Reason | Revisit when |
 |---|---|---|
-| Four-role server authorization | Unit tests call server actions as owner/editor/reviewer/viewer; a real browser test signs in four SDK test accounts and checks their workspace controls | Implemented locally; direct live attack checks still required |
-| Revision and stale result rejection | Unit tests change project revision before completion; no asset created | Implemented offline; concurrent edit race remains |
-| Idempotent request and private submission | Concurrent action test creates one workflow row; adapter contract test repeats the same key and rejects changed input | Implemented offline |
-| Cancelled/failed do not publish | Unit tests; adapter cancellation contract test | Implemented offline |
-| Old media cannot attach to a reparsed storyboard | Parse clears current selections; creative edits invalidate them, trim-only edits preserve them | Implemented offline |
-| Private asset integrity and access | Worker checks HEAD metadata, then verifies actual bytes for bounded media if an edge intermediary omits the checksum; live character and scene images render through the authenticated route | Implemented and live-checked for images; large-video path remains unverified |
-| GPU execution evidence | Worker persists private phase and actual adapter timestamps; Studio shows job IDs, pinned revision, elapsed time and output checksum | Implemented offline and visually checked; live provider metrics and a paid render remain unverified |
-| OpenAI Responses structured parsing | Original Pydantic fields and enums encoded as strict JSON Schema; the owner completed one live parse and reviewed the editable storyboard | Implemented and live-checked for one short script |
-| Catalog OpenAI image, ElevenLabs, YouTube and Email | Endpoint schemas checked with official CLI; character and scene images generated and published live; YouTube results appeared in the Studio; voice and mail paths have offline contract checks | Images and YouTube live-checked; voice/mail and billing amounts unverified |
-| Login, refresh persistence and browser workflow | Owner signed in online, created a workspace/project, confirmed refresh persistence, and reviewed generated image versions; earlier local suites covered six smoke cases and four roles | Core owner flow live-checked; live multi-user role tests pending |
-| One actual first-frame/H3/export run | Azure adapter is reachable, but its execution worker is off and Vast access and approved paid spend are missing; the app rejects private jobs before queueing | Not verified; honest runtime block in place |
-| Atomic same-project concurrent edits | RecordRoom action performs read then update without transactional compare-and-swap | Must implement before shared production editing; not needed for one-editor exercise proof |
+| Direct structured parsing | Preserve the original schema; the Catalog chat contract used here has no strict schema parameter | Catalog supports the required schema contract |
+| Private GPU engine | Existing H3 workflow runs on a separately managed GPU | A deployment target supports that workload and access boundary |
+| Private binary storage | Shared customer media needs workspace authorization | Platform storage fits the sharing model and measured file sizes |
+| Authorized polling | Avoid broad room subscriptions exposing another workspace | Workspace-scoped subscriptions can enforce the same checks |
+| No payment checkout | The current task is controlled evaluation access | Selling access becomes an actual requirement |
 
-## Acceptance criteria for an honest submission
+StoryNest and ThreadHunt were read for DeepSpace JobRoom/continuation patterns.
+Illustory's storyboard schema, creative rules and filmmaking workflow came from
+the existing product; it does not copy their product flows.
 
-The app should start under the intended account; a signed-in owner can create a workspace/project and see them after refresh; a second editor can edit but cannot submit paid work; reviewer can select a version but cannot edit; viewer can only read. A single short script should parse, produce one character/scene/first frame, H3 a short shot, optionally enhance it, and export a cut. Every job should have input revision, terminal state, error or output version, and private media should play through the authenticated route. One cancelled/stale run should prove no current asset replacement. Record actual runtime observations and provider costs. Do not claim this criterion has been met from unit tests alone.
+## Engineering gaps
 
-## Decision log
-
-The [StoryNest](https://github.com/deepdotspace/storynest) reference uses a JobRoom to run its storybook pipeline and records to surface page progress. [ThreadHunt](https://github.com/deepdotspace/threadhunt) checkpoints scan state with `ctx.continue` to respect Worker limits. This app borrows those platform patterns but uses an external idempotent execution service because image/video generation already exists in the private Illustory stack.
-
-| Decision | Why | Revisit when |
+| Gap and evidence | Category | Next action |
 |---|---|---|
-| Keep original engine private behind an API | Protects proprietary implementation while exposing real control-plane code; avoids reimplementing tuned GPU workflow | A customer needs complete self-hosted source or portable engine |
-| DeepSpace RecordRoom + JobRoom | Native persistence, auth integration and durable background state meet the exercise scope | Cross-project throughput or concurrency evidence demands a different partition |
-| Server actions for product records | Membership is per workspace; app roles alone cannot authorize one tenant's records | SDK supports first-class membership-aware row policy at required granularity |
-| Keep binaries in private service | App-public file scope is wrong for customer media; private user scope is not shared workspace scope | A workspace-private storage primitive and measured file caps fit |
-| Three-second authorized status refresh | Generic scaffold WebSocket rooms lack workspace-level authorization | Add workspace-scoped subscriptions only if the SDK provides enforceable tenant filters |
-| Use four Catalog providers with distinct jobs | OpenAI image supplies visual references; ElevenLabs adds selectable speech; YouTube adds opt-in research; Email adds delivery notice. Strict text parsing uses direct OpenAI Responses because the Catalog chat contract has no schema field. | Remove any whose live value does not justify its price; reconsider direct parsing if Catalog exposes strict schema |
-| Keep conditioned first-frame generation private | Catalog image endpoint accepts a text prompt only; the existing workflow edits with character and scene references | Catalog adds a reference-image edit endpoint with equivalent quality |
+| Provider dollar caps are not active; approved accounts can repeat calls | Must Implement before sponsored reviewer testing | Apply the agreed project budgets and verify enforcement |
+| Email returns sender-not-configured | Must Implement if email is presented as available | Configure sender and verify delivery |
+| Project updates read a revision, then write separately | Must Implement before concurrent editing | Serialize project writes or use atomic compare-and-swap; test overlapping saves/publication |
+| Private worker can be interrupted; ambiguous GPU work needs reconciliation | Must Understand for this pilot | Use durable execution or a budgeted persistent worker before unattended customer operation |
+| Dependency audit has unresolved advisories | Must Implement before customer production | Review reachability and upgrade compatible affected dependencies |
+| Studio keeps five stages, draft state and request handlers in one large component | Must Understand; refactor before expanding the editor | Extract stage views with explicit props in a separate behavior-tested change |
+| Kubernetes, Kafka or a payment service | Do Not Build now | No measured workload or commercial requirement justifies them |
 
-## Assumption register
-
-| Assumption | Risk if false | Response |
-|---|---|---|
-| One editor changes a project at a time | Lost updates from non-atomic read-check-write | Serialize project edits or add transactional CAS |
-| Private adapter can be reached over HTTPS | Jobs fail before execution | Provide private ingress and set Worker secret URL |
-| Direct OpenAI parser supports a short representative script under its output cap | One short live parse succeeded; longer scripts and output cost have not been measured | Measure longer scripts and enforce a documented size/quality boundary |
-| GPU operations are idempotent at adapter boundary | Worker replay could spend twice | Private ledger dedupes; interrupted work is never automatically resubmitted |
-| Studio pilot uses a small job volume | App-wide JobRoom serial execution becomes a bottleneck | Measure queue delay, then partition queues by workspace or project |
-
-## Top engineering gaps
-
-| Gap | Evidence | Severity | Category | Required action | Status |
-|---|---|---|---|---|---|
-| Owner hands-on acceptance | Owner reviewed live Script, Cast, Scenes and Shots; generated character and scene versions display; Edit & Export has no live media yet | Medium | Must Implement | Review remaining stages after private worker is enabled | In progress |
-| Private one-shot execution | Azure adapter HTTPS, PostgreSQL and Blob are verified; Vast public key is not yet accepted and paid spend is not approved | High | Must Implement | Verify Vast access and its new template, approve a single-run ceiling, observe parse→export | Open |
-| Catalog response and cost verification | Live image responses work, but voice/mail and actual provider charges remain unknown | High | Must Implement | Record actual charges and validate voice/mail only when needed and approved | Open |
-| Concurrent edit atomicity | Server action reads revision then updates separately | Medium | Must Understand | Add serialized/conditional project write before true multi-editor customer use | Open |
-| Kubernetes, Kafka, second model vendor | No concrete pilot requirement | Low | Do Not Build | Avoid until measurements justify | Closed |
+Current runtime evidence and unverified stages are maintained in
+[VERIFICATION.md](VERIFICATION.md), rather than repeated here.
