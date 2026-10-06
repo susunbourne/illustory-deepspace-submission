@@ -65,7 +65,7 @@ class Records {
   }
   env() {
     return {
-      DEEPSPACE_APP_ID: 'test-app', OWNER_USER_ID: 'owner', APP_NAME: 'test-app', PRIVATE_WORKFLOW_URL: 'https://private.test', PRIVATE_WORKFLOW_TOKEN: 'test-token', EMAIL_FROM: this.emailFrom,
+      DEEPSPACE_APP_ID: 'test-app', OWNER_USER_ID: 'owner', APP_NAME: 'test-app', PRIVATE_WORKFLOW_URL: 'https://private.test', PRIVATE_WORKFLOW_TOKEN: 'test-token', EMAIL_FROM: this.emailFrom, OPENAI_API_KEY: 'test-only',
       JOB_ROOMS: {}, RECORD_ROOMS: { idFromName: (name: string) => name, get: () => ({ fetch: async (request: Request) => {
         const { tool, params } = await request.json() as { tool: string; params: Record<string, unknown> }
         return Response.json(await this.execute(tool, params))
@@ -244,8 +244,9 @@ describe('result publication', () => {
     expect(r.get('workflow-jobs', 'j')?.data.status).toBe('succeeded')
   })
   it('does not apply a parsed storyboard twice after a status-write interruption', async () => {
-    integrationCall.mockResolvedValueOnce({ choices: [{ message: { content: JSON.stringify(characterReply) } }] })
-      .mockResolvedValueOnce({ choices: [{ message: { content: JSON.stringify(sceneReply) } }] })
+    const openAI = vi.fn().mockResolvedValueOnce(Response.json({ status: 'completed', output: [{ type: 'message', content: [{ type: 'output_text', text: JSON.stringify(characterReply) }] }] }))
+      .mockResolvedValueOnce(Response.json({ status: 'completed', output: [{ type: 'message', content: [{ type: 'output_text', text: JSON.stringify(sceneReply) }] }] }))
+    vi.stubGlobal('fetch', openAI)
     const r = seeded(); r.insert('workflow-jobs', 'j', { ...job('parse'), targetType: 'project', targetId: 'p' }); r.failNextJobSuccess = true
     r.get('projects', 'p')!.data.currentAssets = { 'character:c': 'old-image' }
     await expect(run(r)).rejects.toThrow('Simulated Worker interruption')
@@ -254,7 +255,7 @@ describe('result publication', () => {
     await run(r)
     expect(r.get('projects', 'p')?.data.revision).toBe(2)
     expect(r.get('workflow-jobs', 'j')?.data.outputVersion).toBe(2)
-    expect(integrationCall).toHaveBeenCalledTimes(2)
+    expect(openAI).toHaveBeenCalledTimes(2)
   })
   it('publishes a catalog voice through private storage once', async () => {
     const data = btoa('a'.repeat(200))

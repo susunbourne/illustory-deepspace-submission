@@ -4,8 +4,9 @@ import type { Asset, Membership, Project, Row, WorkflowJob, Workspace } from './
 import { assetSlot } from './illustory/types'
 import { validStoryboard } from './illustory/validation'
 import { getPrivateJob, submitPrivateJob, storeCatalogAsset, verifyPrivateAsset, type PrivateStatus } from './illustory/private-workflow'
-import { chatText, SCRIPT_MODEL, voiceText } from './illustory/creative'
+import { voiceText } from './illustory/creative'
 import { characterMessages, sceneMessages, parseCharacterBible, parseOriginalStoryboard, originalCharacterImagePrompt, originalSceneImagePrompt } from './illustory/original-creative'
+import { characterListSchema, storyboardSchema, structuredResponse } from './illustory/structured-output'
 import { generateCatalogImage, generateCatalogVoice } from './illustory/catalog'
 
 async function records<T>(env: Env, tool: string, params: Record<string, unknown>): Promise<T> {
@@ -74,6 +75,7 @@ async function handleWorkflow(job: Job, ctx: JobContext, env: Env): Promise<unkn
         status = { id: jobId, status: 'succeeded', progress: 1, result: work.catalogResult }
       } else {
         if (work.catalogAttempted) throw new Error('Catalog result is ambiguous; start a new job only after checking provider usage')
+        if (work.operation === 'parse' && !env.OPENAI_API_KEY) throw new Error('OpenAI structured parsing is not configured. Set the server-only OPENAI_API_KEY secret.')
         await update(env, 'workflow-jobs', jobId, { status: 'running', progress: 0.05, catalogAttempted: true })
         const catalog = buildCronContext(env, env.OWNER_USER_ID, `app:${env.DEEPSPACE_APP_ID}`)
         const call = (endpoint: string, params?: Record<string, unknown>) => catalog.integrations.call(endpoint, params ?? {})
@@ -81,10 +83,11 @@ async function handleWorkflow(job: Job, ctx: JobContext, env: Env): Promise<unkn
         const board = work.request.storyboard
         if (work.operation === 'parse') {
           if (typeof script !== 'string' || !script.trim() || script.length > 20_000) throw new Error('Script must contain 1–20,000 characters for parsing')
-          const characterRaw = await call('openai/chat-completion', { model: SCRIPT_MODEL, max_tokens: 5000, messages: characterMessages(script) })
-          const characters = parseCharacterBible(chatText(characterRaw))
-          const sceneRaw = await call('openai/chat-completion', { model: SCRIPT_MODEL, max_tokens: 16000, messages: sceneMessages(script, characters) })
-          status = { id: jobId, status: 'succeeded', progress: 1, result: { storyboard: parseOriginalStoryboard(chatText(sceneRaw), characters) } }
+          const model = env.OPENAI_PARSE_MODEL || 'gpt-4o-mini'
+          const characterRaw = await structuredResponse(env.OPENAI_API_KEY, model, 'illustory_characters', characterListSchema, characterMessages(script), 5000, ctx.signal)
+          const characters = parseCharacterBible(characterRaw)
+          const sceneRaw = await structuredResponse(env.OPENAI_API_KEY, model, 'illustory_storyboard', storyboardSchema, sceneMessages(script, characters), 16000, ctx.signal)
+          status = { id: jobId, status: 'succeeded', progress: 1, result: { storyboard: parseOriginalStoryboard(sceneRaw, characters) } }
         } else {
           if (!validStoryboard(board)) throw new Error('Invalid frozen storyboard')
           let media: string

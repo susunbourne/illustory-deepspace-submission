@@ -38,4 +38,4 @@ The adapter reports `queued`, `private_execution`, and terminal phases. `private
 
 ## Evidence still required
 
-No paid GPU run has been authorized. A real one-shot acceptance record must contain the job IDs, input revision, selected source asset versions, actual start/finish time, output hash, playable result, provider bill, and any failure log. Record those values after a capped real run; never substitute a static example for production evidence. The owner must also decide whether the private adapter can be made reachable through authenticated HTTPS for a DeepSpace deployment.
+No paid GPU run has been authorized. A real one-shot acceptance record must contain the job IDs, input revision, selected source asset versions, actual start/finish time, output hash, playable result, provider bill, and any failure log. Record those values after a capped real run; never substitute a static example for production evidence. The private adapter is reachable through authenticated HTTPS from DeepSpace; its GPU worker is still disabled pending Vast setup.

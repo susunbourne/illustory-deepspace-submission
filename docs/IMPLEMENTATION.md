@@ -15,7 +15,8 @@ Browser
        ├─ membership check on every workspace/project/asset operation
        ├─ DeepSpace RecordRoom: workspaces, memberships, projects, jobs, assets
        ├─ DeepSpace JobRoom: durable orchestration and checkpoints
-       │     ├─ Catalog OpenAI: screenplay structure + character/scene images
+       │     ├─ OpenAI Responses: strict screenplay structure (server secret)
+       │     ├─ Catalog OpenAI: character/scene images
        │     ├─ Catalog ElevenLabs: voice list + selected speech
        │     └─ HTTPS + private bearer secret → owner-operated private adapter
                    ├─ Azure PostgreSQL idempotency ledger + private Blob media
@@ -53,7 +54,8 @@ DeepSpace RecordRoom holds persistent workspace membership, projects, scripts, s
 | Old media cannot attach to a reparsed storyboard | Parse clears current selections; creative edits invalidate them, trim-only edits preserve them | Implemented offline |
 | Private asset integrity and access | Worker checks HEAD hash/size; adapter path isolation and Range tested | Implemented offline; live media test required |
 | GPU execution evidence | Worker persists private phase and actual adapter timestamps; Studio shows job IDs, pinned revision, elapsed time and output checksum | Implemented offline and visually checked; live provider metrics and a paid render remain unverified |
-| Catalog OpenAI, ElevenLabs, YouTube and Email | Endpoint schemas checked with official CLI; server-side action/job paths implemented; offline call mocks verify search, voices, parse and speech publication | Implemented offline; provider responses and billing unverified |
+| OpenAI Responses structured parsing | Original Pydantic fields and enums encoded as strict JSON Schema; server-only key and offline request/response tests | Implemented offline; owner key and live re-test pending |
+| Catalog OpenAI image, ElevenLabs, YouTube and Email | Endpoint schemas checked with official CLI; server-side action/job paths implemented; offline call mocks verify search, voices and speech publication | Implemented offline; paid provider responses and billing unverified |
 | Login, refresh persistence and browser workflow | Intended owner CLI login and app registration succeeded; six browser smoke tests include sign-in, workspace/project creation, manual storyboard editing and refresh persistence | Implemented locally; owner's hands-on review pending |
 | One actual H3/export run | Azure private adapter is reachable, but Vast access, GPU worker and approved paid spend are missing | Not verified |
 | Atomic same-project concurrent edits | RecordRoom action performs read then update without transactional compare-and-swap | Must implement before shared production editing; not needed for one-editor exercise proof |
@@ -73,7 +75,7 @@ The [StoryNest](https://github.com/deepdotspace/storynest) reference uses a JobR
 | Server actions for product records | Membership is per workspace; app roles alone cannot authorize one tenant's records | SDK supports first-class membership-aware row policy at required granularity |
 | Keep binaries in private service | App-public file scope is wrong for customer media; private user scope is not shared workspace scope | A workspace-private storage primitive and measured file caps fit |
 | Three-second authorized status refresh | Generic scaffold WebSocket rooms lack workspace-level authorization | Add workspace-scoped subscriptions only if the SDK provides enforceable tenant filters |
-| Use four Catalog integrations with distinct jobs | OpenAI exposes reviewable parser/visual direction; ElevenLabs adds selectable speech; YouTube adds opt-in research; Email adds delivery notice | Remove any whose live value does not justify its price |
+| Use four Catalog providers with distinct jobs | OpenAI image supplies visual references; ElevenLabs adds selectable speech; YouTube adds opt-in research; Email adds delivery notice. Strict text parsing uses direct OpenAI Responses because the Catalog chat contract has no schema field. | Remove any whose live value does not justify its price; reconsider direct parsing if Catalog exposes strict schema |
 | Keep conditioned first-frame generation private | Catalog image endpoint accepts a text prompt only; the existing workflow edits with character and scene references | Catalog adds a reference-image edit endpoint with equivalent quality |
 
 ## Assumption register
