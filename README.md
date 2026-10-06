@@ -4,24 +4,32 @@
 
 Creators often move between a chatbot, image and video tools, shared documents, and editing software. Those handoffs make it hard to keep characters consistent, know which shot was approved, or recover a failed render. Illustory gives the team one editable production plan and a versioned history of its assets. Editors shape the story, owners submit paid generation, and reviewers select the final cut.
 
-This is a DeepSpace adaptation of my existing Illustory product, shaped by conversations about AI video work with content creators and e-commerce advertising teams. The live pilot produced four H3 shots and a **32.8-second, 1920×1080 MP4** that played in the deployed Studio. That proves the script-to-export path; it is not a measured claim about customer adoption or team productivity. [Open the Studio](https://illustory.app.space/studio) · [Verification record](docs/VERIFICATION.md)
+This is a DeepSpace adaptation of my existing Illustory product, shaped by conversations about AI video work with content creators and e-commerce advertising teams. The live pilot produced four H3 shots and a **32.8-second, 1920×1080 MP4** that played in the deployed Studio. [Open the Studio](https://illustory.app.space/studio) · [Verification record](docs/VERIFICATION.md)
 
-## Find your way around
+## Repository map
 
-| Location | What to inspect |
+| Folder or root file | Purpose |
 |---|---|
-| [Studio UI](src/pages/%28app%29/%28protected%29/studio.tsx) and [styles](src/pages/%28app%29/%28protected%29/studio.css) | Script, Cast, Scenes, Shots, and Edit & Export; version selection and Activity. |
-| [Film domain](src/illustory/) | Product types, creative rules, structured output, provider adapters, and validation. Start with [types](src/illustory/types.ts), [model output schema](src/illustory/structured-output.ts), and [parse mapping](src/illustory/original-creative.ts). |
-| [Persistent schemas](src/schemas/) | DeepSpace user, workspace, membership, project, job, and asset records. |
-| [Server actions](src/actions/index.ts) | Membership, roles, project revisions, job requests, and asset selection. |
-| [Job runner](src/jobs.ts) | Durable execution, provider calls, checkpoints, validation, and publication. |
-| [HTTP routes](src/server/) and [Worker entry](worker.ts) | Authorized media access and DeepSpace runtime wiring. |
-| [Catalog client](src/illustory/catalog.ts) and [private engine client](src/illustory/private-workflow.ts) | External integration contracts. |
-| [Browser tests](tests/) and colocated unit tests | Role, workflow, and rendering checks. |
-| [Build helpers](tooling/) and [static assets](public/) | Public-page prerendering and browser assets. |
-| [Documentation](docs/) | [Architecture](docs/IMPLEMENTATION.md), [setup](docs/RUNNING.md), [verification](docs/VERIFICATION.md), [GPU contract](docs/GPU_EXECUTION.md), and [spending policy](docs/SPENDING_ACCESS.md). |
+| [`src/`](src/) | All application source: browser UI, server actions, schemas, provider clients, and job orchestration. The table below is the code-reading guide. |
+| [`tests/`](tests/) | Browser smoke and role suites, plus the unit-test runner configuration. Unit tests also sit beside their source. |
+| [`tooling/`](tooling/) | Build-time prerendering of the public page. |
+| [`public/`](public/) | Static favicon, robots file, and response headers. |
+| [`docs/`](docs/) | [Architecture](docs/IMPLEMENTATION.md), [setup](docs/RUNNING.md), [verification](docs/VERIFICATION.md), [GPU boundary](docs/GPU_EXECUTION.md), and [spending controls](docs/SPENDING_ACCESS.md). |
+| [`worker.ts`](worker.ts), [`vite.config.ts`](vite.config.ts), [`wrangler.toml`](wrangler.toml) | DeepSpace Worker entry, app build, and deployment bindings. |
+| [`package.json`](package.json), [`package-lock.json`](package-lock.json) | npm scripts and locked dependencies. |
 
-Root files are the entry points and configuration that the build and deployment tools expect there. npm and `package-lock.json` are the package-management source of truth.
+### Inside `src/`
+
+| Path | Key files and responsibility |
+|---|---|
+| [`pages/`](src/pages/) | [`studio.tsx`](src/pages/%28app%29/%28protected%29/studio.tsx) and [`studio.css`](src/pages/%28app%29/%28protected%29/studio.css) implement the five production stages, version chooser, and Activity. [`settings.tsx`](src/pages/%28app%29/%28protected%29/settings.tsx) shows account identity; route layouts protect signed-in pages. |
+| [`components/`](src/components/) | Navigation, SEO, errors, and reusable buttons, menus, tooltips, and status UI. |
+| [`illustory/`](src/illustory/) | [`types.ts`](src/illustory/types.ts) defines the editable film plan. [`original-rules.ts`](src/illustory/original-rules.ts) and [`original-creative.ts`](src/illustory/original-creative.ts) build and validate the two-stage script parse. [`structured-output.ts`](src/illustory/structured-output.ts) supplies strict JSON Schemas. [`catalog.ts`](src/illustory/catalog.ts) handles images, voices, and YouTube results; [`private-workflow.ts`](src/illustory/private-workflow.ts) calls and verifies the private engine. |
+| [`schemas/`](src/schemas/) | [`illustory-schemas.ts`](src/schemas/illustory-schemas.ts) declares workspaces, memberships, projects, jobs, and versioned assets. User and admin records have separate files. |
+| [`actions/`](src/actions/) | [`index.ts`](src/actions/index.ts) checks identity, workspace role, spending approval, expected revision, and job idempotency before user actions. |
+| [`jobs.ts`](src/jobs.ts) | Dispatch and continue background work, checkpoint external calls, validate outputs, publish asset versions, and optionally notify the owner. [`cron.ts`](src/cron.ts) is an unused SDK scaffold hook; no scheduled task is claimed here. |
+| [`server/`](src/server/) | Route registration, action HTTP boundary, and workspace-authorized media proxy. |
+| Root of `src/` | [`main.tsx`](src/main.tsx) mounts React; [`schemas.ts`](src/schemas.ts) registers collections; [`integrations.ts`](src/integrations.ts) and [`subscriptions.ts`](src/subscriptions.ts) configure DeepSpace app features. |
 
 ## From script to export
 
@@ -75,6 +83,18 @@ flowchart LR
 
 Owner, editor, reviewer, and viewer permissions are enforced on the server. Editors develop the storyboard; reviewers select versions and request export; owners manage membership and generation; viewers inspect the workspace. A workspace role alone never grants use of the app owner's provider credits. See the [exact role table](docs/IMPLEMENTATION.md#roles).
 
+### The technical handoffs
+
+| Work in a creative team | Technology and exact handoff | Result the next person can use |
+|---|---|---|
+| **Writing and planning** | The editor enters a script. [`original-creative.ts`](src/illustory/original-creative.ts) first requests a Character Bible, then passes it into scene/shot parsing. [`structured-output.ts`](src/illustory/structured-output.ts) sends strict JSON Schemas to OpenAI Responses with `store: false`; the returned data is validated and mapped into editable project state. | Cast descriptions, scene anchors, shots, dialogue, camera choices, and timed motion beats rather than a prose blob. |
+| **Research and visual development** | A project title and synopsis feed DeepSpace YouTube search; the Studio keeps up to three links with the project. For approved generation, [`catalog.ts`](src/illustory/catalog.ts) calls DeepSpace's OpenAI `gpt-image-2` endpoint for character and scene references. | Reference options attached to the same storyboard the team edits. |
+| **Voice and character continuity** | The ElevenLabs catalog supplies selectable `voice_id` values; a chosen voice and short text can produce a speech reference. Cast and scene references then become inputs to a shot's private first-frame request. | A chosen character look and voice remain connected to a named shot and asset version. |
+| **Production and GPU operations** | [`actions/index.ts`](src/actions/index.ts) pins the shot and selected assets to a project revision. [`jobs.ts`](src/jobs.ts) creates a DeepSpace job, while [`private-workflow.ts`](src/illustory/private-workflow.ts) submits an authenticated request with an `Idempotency-Key` to the Azure adapter. The adapter runs reference-conditioned first frames and the H3/ComfyUI workflow on Vast. | A trackable job with a provider ID, state, error, and immutable media metadata. |
+| **Review and delivery** | The Worker checks byte size and SHA-256 metadata, cancellation, and input revision before saving a new asset version. An owner or editor sets trims; a reviewer can choose asset versions and request the private FFmpeg export. Workspace-authorized routes serve playback. Email can alert the owner once configured. | An inspectable final cut with a known source revision and a clear approval boundary. |
+
+This division lets a content or advertising team collaborate on creative decisions without sharing provider accounts or copying prompts and files between tools. It also gives a technical reviewer concrete points to inspect: schema validation, server authorization, idempotent external execution, integrity checks, and stale-result handling. The GPU workflow remains in the separately operated private service; the public code shows its API contract and the complete DeepSpace control plane.
+
 ## Integration decisions
 
 | Capability | Value in this workflow | Boundary |
@@ -96,9 +116,11 @@ I left out payment checkout because this is a controlled evaluation pilot. Job s
 
 ## Product and GTM judgment
 
-The discovery was a workflow problem: AI tools could generate individual assets, but teams still had to coordinate scripts, cast, shots, approvals, and versions across several interfaces. My hypothesis was that a structured, editable production plan would make those handoffs easier to see and repeat. I built the original Illustory workflow and adapted a focused slice to DeepSpace so a developer can inspect the schema, service boundaries, and working output.
+**Discover.** Conversations with content creators and e-commerce advertising teams exposed a recurring cost: models could make individual images and clips, but people still had to reconstruct the same brief, cast, scene, and approval history in multiple products. I chose the handoff from script to approved video as the problem to solve.
 
-The first live experiment established that a script can reach a playable export. The next experiment is with an invited creative team: measure time from brief to approved cut, regenerations per shot, cost per accepted clip, and where collaborators leave the flow. Those numbers would support an efficiency or adoption claim; one completed pilot project cannot. That is how I would present and distribute a developer tool as well: show the useful path, identify what was measured, and learn from real users.
+**Experiment and build.** I defined the storyboard schema and creative rules in the original Illustory product, then tested whether the same workflow could run as a smaller, reviewable DeepSpace app. The specific experiment was to take one script through parsing, editable shot planning, reference assets, four GPU clips, version selection, and a playable export. The live result is linked above. The decision to use direct structured parsing and a private GPU engine came from the contracts these steps require, while DeepSpace supplies identity, durable state, jobs, and fitting Catalog integrations.
+
+**Distribute and learn.** I can show a creative or advertising team the working Studio, invite members into a workspace, and observe whether they reach an approved cut. The next growth experiment will track invitations → activated workspaces → completed storyboards → accepted clips → exports, alongside time from brief to approval, regenerations per shot, and cost per accepted clip. Feedback at each stage tells me whether to improve onboarding, schema guidance, visual consistency, or GPU cost before expanding distribution. That connects a technical demo to adoption work rather than treating page views as success.
 
 ## Run and review
 
@@ -115,4 +137,4 @@ Local use needs a DeepSpace login. Paid generation also needs server-side secret
 
 The deployed app is [illustory.app.space/studio](https://illustory.app.space/studio). Signing in does not expose the owner's projects or credits. A reviewer can provide their DeepSpace user ID from Settings so the owner can grant review-workspace access and, separately, approve any paid test. The export is served through workspace-authorized playback. I have not copied the 22 MB MP4 into this public repository or embedded a public media URL. Its playback is documented in the [verification notes](docs/VERIFICATION.md) and [export recovery record](docs/EXPORT_RECOVERY.md).
 
-I supplied the existing product flow, schemas, creative rules, and private-engine boundary, and directed the coding agent's DeepSpace adaptation. The agent implemented the UI, platform records and jobs, integrations, authorization, and tests; I reviewed product behavior and initiated the live model/GPU run. We traced a failed export publication to media integrity validation, recovered the same private result without another GPU render, and verified browser playback. The code and limitations are open for review; GPU nodes, model files, customer media, and credentials remain private.
+I supplied the existing product flow, schemas, creative rules, and private-engine boundary, and directed the coding agent's DeepSpace adaptation. The agent implemented the UI, platform records and jobs, integrations, authorization, and tests; I reviewed product behavior and initiated the live model/GPU run.
