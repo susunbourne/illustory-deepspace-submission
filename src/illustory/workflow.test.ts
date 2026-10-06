@@ -33,6 +33,7 @@ class Records {
   failNextJobSuccess = false
   emailFrom = ''
   executionEnabled = true
+  gpuEnabled = true
   insert(collection: string, id: string, data: Record<string, unknown>) {
     if (!this.tables.has(collection)) this.tables.set(collection, new Map())
     this.tables.get(collection)!.set(id, { recordId: id, data })
@@ -84,7 +85,7 @@ class Records {
   }
   env() {
     return {
-      DEEPSPACE_APP_ID: 'test-app', OWNER_USER_ID: 'owner', APP_NAME: 'test-app', PRIVATE_WORKFLOW_URL: 'https://private.test', PRIVATE_WORKFLOW_TOKEN: 'test-token', PRIVATE_WORKFLOW_EXECUTION_ENABLED: this.executionEnabled ? '1' : '0', EMAIL_FROM: this.emailFrom, OPENAI_API_KEY: 'test-only',
+      DEEPSPACE_APP_ID: 'test-app', OWNER_USER_ID: 'owner', APP_NAME: 'test-app', PRIVATE_WORKFLOW_URL: 'https://private.test', PRIVATE_WORKFLOW_TOKEN: 'test-token', PRIVATE_WORKFLOW_EXECUTION_ENABLED: this.executionEnabled ? '1' : '0', PRIVATE_WORKFLOW_GPU_ENABLED: this.gpuEnabled ? '1' : '0', EMAIL_FROM: this.emailFrom, OPENAI_API_KEY: 'test-only',
       JOB_ROOMS: {}, RECORD_ROOMS: { idFromName: (name: string) => name, get: () => ({ fetch: async (request: Request) => {
         const { tool, params } = await request.json() as { tool: string; params: Record<string, unknown> }
         return Response.json(await this.execute(tool, params))
@@ -152,6 +153,20 @@ describe('workspace authorization and revisions', () => {
     expect(result.success).toBe(false)
     expect(result.error).toContain('not enabled')
     expect(r.tables.get('workflow-jobs')?.size ?? 0).toBe(0)
+  })
+  it('allows first-frame while the Vast GPU gate remains closed', async () => {
+    const r = seeded()
+    r.gpuEnabled = false
+    r.get('projects', 'p')!.data.currentAssets = { 'scene-anchor:s': 'anchor', 'character:c': 'character' }
+    r.insert('assets', 'anchor', { workspaceId: 'w', projectId: 'p', operation: 'scene-anchor', targetId: 's',
+      storageKey: 'catalog/p/anchor.png', mimeType: 'image/png', sha256: 'a'.repeat(64), byteSize: 100 })
+    r.insert('assets', 'character', { workspaceId: 'w', projectId: 'p', operation: 'character', targetId: 'c',
+      storageKey: 'catalog/p/character.png', mimeType: 'image/png', sha256: 'b'.repeat(64), byteSize: 100 })
+    const params = { projectId: 'p', expectedRevision: 1, targetId: 'q', idempotencyKey: 'shot-request-0002' }
+    expect((await invoke(r, 'requestJob', 'owner', { ...params, operation: 'first-frame' })).success).toBe(true)
+    const h3 = await invoke(r, 'requestJob', 'owner', { ...params, operation: 'h3', idempotencyKey: 'video-request-0002' })
+    expect(h3.success).toBe(false)
+    expect(h3.error).toContain('Vast GPU')
   })
   it('resumes saved paid media only for the owner and current revision', async () => {
     const r = seeded()

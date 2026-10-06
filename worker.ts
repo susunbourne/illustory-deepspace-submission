@@ -117,6 +117,8 @@ export interface Env extends DOBindings<typeof __DO_MANIFEST__> {
   PRIVATE_WORKFLOW_TOKEN?: string
   /** Enable paid private execution only after the Azure/Vast worker is actually online. */
   PRIVATE_WORKFLOW_EXECUTION_ENABLED?: string
+  /** Separate gate for Vast-backed H3 and SeedVR2 jobs. */
+  PRIVATE_WORKFLOW_GPU_ENABLED?: string
   /** OpenAI Responses structured parsing. Encrypted server secret, never a VITE_ variable. */
   OPENAI_API_KEY?: string
   OPENAI_CHARACTER_MODEL?: string
