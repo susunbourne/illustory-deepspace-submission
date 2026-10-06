@@ -5,6 +5,7 @@ import { assetSlot, emptyStoryboard } from '../illustory/types'
 import { validStoryboard } from '../illustory/validation'
 import { cancelPrivateJob } from '../illustory/private-workflow'
 import { voiceChoices, youtubeReferences } from '../illustory/catalog'
+import { BILLING_ACCESS_ERROR, canSpendOwnerCredits } from '../illustory/billing-access'
 import type { Asset, Membership, Operation, Project, Row, Storyboard, TargetType, WorkflowJob, Workspace, WorkspaceRole } from '../illustory/types'
 
 const fail = (error: string, code = 'invalid_request'): ActionResult => ({ success: false, error, code })
@@ -51,6 +52,7 @@ const listWorkspaces: ActionHandler<Env> = async ({ tools, userId }) => {
   }
   return ok(items)
 }
+const getBillingAccess: ActionHandler<Env> = async ({ env, userId }) => ok({ approved: canSpendOwnerCredits(env, userId) })
 const createWorkspace: ActionHandler<Env> = async ({ params, tools, userId }) => {
   const name = str(params.name, 120)
   if (!name) return fail('Workspace name is required')
@@ -139,6 +141,7 @@ const listJobs: ActionHandler<Env> = async ctx => {
   return ctx.tools.query<WorkflowJob>('workflow-jobs', { where: { projectId: id }, limit: 100 })
 }
 const listVoices: ActionHandler<Env> = async ctx => {
+  if (!canSpendOwnerCredits(ctx.env, ctx.userId)) return fail(BILLING_ACCESS_ERROR, 'spending_not_approved')
   const id = str(ctx.params.projectId, 100)
   if (!id || !await projectAccess(ctx, id, ['owner'])) return fail('Owner required to list billable voices', 'forbidden')
   const result = await ctx.tools.integration('elevenlabs/list-voices', {})
@@ -146,6 +149,7 @@ const listVoices: ActionHandler<Env> = async ctx => {
   try { return ok(voiceChoices(result.data)) } catch (error) { return fail(String(error), 'provider_response_invalid') }
 }
 const searchReferences: ActionHandler<Env> = async ctx => {
+  if (!canSpendOwnerCredits(ctx.env, ctx.userId)) return fail(BILLING_ACCESS_ERROR, 'spending_not_approved')
   const id = str(ctx.params.projectId, 100)
   const p = id && await projectAccess(ctx, id, ['owner'])
   if (!p) return fail('Owner required to search references', 'forbidden')
@@ -160,6 +164,7 @@ const searchReferences: ActionHandler<Env> = async ctx => {
   } catch (error) { return fail(String(error), 'provider_response_invalid') }
 }
 const requestJob: ActionHandler<Env> = async ctx => {
+  if (!canSpendOwnerCredits(ctx.env, ctx.userId)) return fail(BILLING_ACCESS_ERROR, 'spending_not_approved')
   const projectId = str(ctx.params.projectId, 100), operation = ctx.params.operation as Operation
   const targetId = str(ctx.params.targetId, 150), idempotencyKey = str(ctx.params.idempotencyKey, 200)
   if (!projectId || !operations.includes(operation) || !targetId || !idempotencyKey || idempotencyKey.length < 8) return fail('Invalid job request')
@@ -279,4 +284,4 @@ const selectAsset: ActionHandler<Env> = async ctx => {
   return saved.success ? ok({ currentAssets, revision: p.data.revision + 1 }) : saved
 }
 
-export const actions: Record<string, ActionHandler<Env>> = { listWorkspaces, createWorkspace, listMembers, setMemberRole, listProjects, createProject, getProject, saveProject, setExportNotification, listAssets, listJobs, listVoices, searchReferences, requestJob, cancelJob, resumeSavedJob, selectAsset }
+export const actions: Record<string, ActionHandler<Env>> = { getBillingAccess, listWorkspaces, createWorkspace, listMembers, setMemberRole, listProjects, createProject, getProject, saveProject, setExportNotification, listAssets, listJobs, listVoices, searchReferences, requestJob, cancelJob, resumeSavedJob, selectAsset }

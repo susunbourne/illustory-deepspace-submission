@@ -107,6 +107,8 @@ export interface Env extends DOBindings<typeof __DO_MANIFEST__> {
   /** Immutable record-scope and platform identity. */
   DEEPSPACE_APP_ID: string
   OWNER_USER_ID: string
+  /** Optional comma-separated verified user IDs approved to spend owner funds. */
+  BILLING_ALLOWED_USER_IDS?: string
   /**
    * Long-lived owner JWT used for developer-billed server calls. User-billed
    * calls always forward the signed-in caller's JWT instead.

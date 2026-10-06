@@ -55,6 +55,8 @@ test('workspace roles see the appropriate production controls', async ({ users }
   await expect(viewer.page.getByText('No video execution recorded yet. A real run is required to show timing and cost.')).toBeVisible()
   await viewer.page.getByRole('button', { name: 'View execution jobs' }).click()
   await expect(viewer.page.getByRole('dialog', { name: 'Activity' })).toBeVisible()
-  await expect(reviewer.page.getByRole('button', { name: 'Export film' })).toBeVisible()
+  // Test users have workspace roles, but no approval to spend the app owner's funds.
+  await expect(reviewer.page.getByRole('button', { name: 'Export film' })).toHaveCount(0)
+  await expect(owner.page.getByText('AI generation, reference search and export require approval', { exact: false })).toBeVisible()
   await expect(viewer.page.getByRole('button', { name: 'Export film' })).toHaveCount(0)
 })

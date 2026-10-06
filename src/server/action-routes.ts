@@ -32,6 +32,7 @@ import { apiWorkerFetch, normalizeApiError } from 'deepspace/worker'
 import type { ActionResult, ActionTools, VerifyResult } from 'deepspace/worker'
 import { actions } from '../actions/index.js'
 import { integrations } from '../integrations.js'
+import { BILLING_ACCESS_ERROR, canSpendOwnerCredits } from '../illustory/billing-access.js'
 import type { AppContext, Env } from '../../worker.js'
 
 type ResolveAuth = (req: Request, env: Env) => Promise<VerifyResult | null>
@@ -71,7 +72,7 @@ export function registerActionRoutes(app: Hono<AppContext>, resolveAuth: Resolve
       if (!seeded.success) return c.json(seeded as unknown as Record<string, unknown>)
     }
     const result = await action({ userId: auth.userId, params, tools, env: c.env, callerJwt })
-    return c.json(result as unknown as Record<string, unknown>)
+    return c.json(result as unknown as Record<string, unknown>, !result.success && result.code === 'spending_not_approved' ? 403 : 200)
   })
 }
 
@@ -101,6 +102,9 @@ function createActionTools(env: Env, userId: string, callerJwt: string): ActionT
   async function callIntegration<T>(endpoint: string, data?: unknown): Promise<ActionResult<T>> {
     const integrationName = endpoint.split('/')[0]
     const billingMode = integrations[integrationName]?.billing ?? 'developer'
+    if (billingMode === 'developer' && !canSpendOwnerCredits(env, userId)) {
+      return { success: false, code: 'spending_not_approved', error: BILLING_ACCESS_ERROR }
+    }
 
     // The api-worker bills the JWT subject: owner for developer mode, caller
     // for user mode. It does not accept a client-supplied billing override.

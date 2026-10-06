@@ -8,6 +8,7 @@ import { voiceText } from './illustory/creative'
 import { characterMessages, sceneMessages, parseCharacterBible, parseOriginalStoryboard, originalCharacterImagePrompt, originalSceneImagePrompt } from './illustory/original-creative'
 import { characterListSchema, storyboardSchema, structuredResponse } from './illustory/structured-output'
 import { generateCatalogImage, generateCatalogVoice } from './illustory/catalog'
+import { BILLING_ACCESS_ERROR, canSpendOwnerCredits } from './illustory/billing-access'
 
 async function records<T>(env: Env, tool: string, params: Record<string, unknown>): Promise<T> {
   const room = env.RECORD_ROOMS.get(env.RECORD_ROOMS.idFromName(`app:${env.DEEPSPACE_APP_ID}`))
@@ -29,6 +30,14 @@ const privateMetrics = (status: PrivateStatus) => ({
   providerFinishedAt: typeof status.finishedAt === 'number' && Number.isFinite(status.finishedAt) ? status.finishedAt : null,
 })
 
+async function assertWorkflowSpend(env: Env, work: WorkflowJob): Promise<void> {
+  if (!canSpendOwnerCredits(env, work.requestedByUserId)) throw new Error(BILLING_ACCESS_ERROR)
+  const members = await query<Membership>(env, 'memberships', { workspaceId: work.workspaceId, userId: work.requestedByUserId, status: 'active' })
+  if (!members.some(m => m.data.role === 'owner' || (work.operation === 'export' && m.data.role === 'reviewer'))) {
+    throw new Error('Workspace permission was revoked before execution')
+  }
+}
+
 async function notifyExportReady(env: Env, jobId: string, work: WorkflowJob, project: Project): Promise<void> {
   if (work.operation !== 'export' || !project.notifyOnExport) return
   const current = await get<WorkflowJob>(env, 'workflow-jobs', jobId)
@@ -41,6 +50,7 @@ async function notifyExportReady(env: Env, jobId: string, work: WorkflowJob, pro
   // but never retries an ambiguous send and mails the reviewer twice.
   await update(env, 'workflow-jobs', jobId, { notificationStatus: 'attempted' })
   try {
+    await assertWorkflowSpend(env, work)
     const workspace = await get<Workspace>(env, 'workspaces', work.workspaceId)
     if (project.workspaceId !== work.workspaceId) throw new Error('Export workspace does not match the project')
     const ownerId = workspace.data.ownerId
@@ -74,6 +84,7 @@ async function handleWorkflow(job: Job, ctx: JobContext, env: Env): Promise<unkn
       if (work.catalogResult?.asset || work.catalogResult?.storyboard) {
         status = { id: jobId, status: 'succeeded', progress: 1, result: work.catalogResult }
       } else {
+        await assertWorkflowSpend(env, work)
         if (work.catalogAttempted) throw new Error('Catalog result is ambiguous; start a new job only after checking provider usage')
         if (work.operation === 'parse' && !env.OPENAI_API_KEY) throw new Error('OpenAI structured parsing is not configured. Set the server-only OPENAI_API_KEY secret.')
         await update(env, 'workflow-jobs', jobId, { status: 'running', progress: 0.05, catalogAttempted: true })
@@ -115,6 +126,7 @@ async function handleWorkflow(job: Job, ctx: JobContext, env: Env): Promise<unkn
     } else {
       let providerJobId = work.providerJobId
       if (!providerJobId) {
+        await assertWorkflowSpend(env, work)
         // The private service owns idempotency. A restart between POST and this
         // update repeats POST with the same key and must return the same ID.
         providerJobId = await submitPrivateJob(env, jobId, work, ctx.signal)

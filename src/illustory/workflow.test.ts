@@ -34,6 +34,7 @@ class Records {
   emailFrom = ''
   executionEnabled = true
   gpuEnabled = true
+  billingAllowedUserIds = ''
   insert(collection: string, id: string, data: Record<string, unknown>) {
     if (!this.tables.has(collection)) this.tables.set(collection, new Map())
     this.tables.get(collection)!.set(id, { recordId: id, data })
@@ -86,6 +87,7 @@ class Records {
   env() {
     return {
       DEEPSPACE_APP_ID: 'test-app', OWNER_USER_ID: 'owner', APP_NAME: 'test-app', PRIVATE_WORKFLOW_URL: 'https://private.test', PRIVATE_WORKFLOW_TOKEN: 'test-token', PRIVATE_WORKFLOW_EXECUTION_ENABLED: this.executionEnabled ? '1' : '0', PRIVATE_WORKFLOW_GPU_ENABLED: this.gpuEnabled ? '1' : '0', EMAIL_FROM: this.emailFrom, OPENAI_API_KEY: 'test-only',
+      BILLING_ALLOWED_USER_IDS: this.billingAllowedUserIds,
       JOB_ROOMS: {}, RECORD_ROOMS: { idFromName: (name: string) => name, get: () => ({ fetch: async (request: Request) => {
         const { tool, params } = await request.json() as { tool: string; params: Record<string, unknown> }
         return Response.json(await this.execute(tool, params))
@@ -114,6 +116,38 @@ async function invoke(records: Records, name: string, userId: string, params: Re
 }
 
 describe('workspace authorization and revisions', () => {
+  beforeEach(() => { enqueueJob.mockClear(); integrationCall.mockReset() })
+  it('allows a new account to own and edit a workspace without granting sponsored spending', async () => {
+    const r = seeded()
+    const created = await invoke(r, 'createWorkspace', 'new-user', { name: 'New studio' })
+    expect(created.success).toBe(true)
+    const workspaceId = (created.data as Stored).recordId
+    const projectResult = await invoke(r, 'createProject', 'new-user', { workspaceId, title: 'My project', script: 'My script' })
+    expect(projectResult.success).toBe(true)
+    const projectId = (projectResult.data as Stored).recordId
+    for (const operation of ['parse', 'character', 'scene-anchor', 'voice', 'first-frame', 'h3', 'seedvr2', 'export']) {
+      const result = await invoke(r, 'requestJob', 'new-user', { projectId, operation, targetId: projectId, expectedRevision: 1, idempotencyKey: 'spend-test-0001', userId: 'owner' })
+      expect(result).toMatchObject({ success: false, code: 'spending_not_approved' })
+    }
+    for (const name of ['searchReferences', 'listVoices']) {
+      expect(await invoke(r, name, 'new-user', { projectId })).toMatchObject({ success: false, code: 'spending_not_approved' })
+    }
+    expect(await invoke(r, 'getBillingAccess', 'new-user', {})).toMatchObject({ success: true, data: { approved: false } })
+    expect(enqueueJob).not.toHaveBeenCalled()
+    expect(integrationCall).not.toHaveBeenCalled()
+    expect(r.tables.get('workflow-jobs')?.size ?? 0).toBe(0)
+  })
+  it('requires both spending approval and the workspace operation permission', async () => {
+    const r = seeded()
+    r.billingAllowedUserIds = ' reviewer , editor , outside '
+    const params = { projectId: 'p', operation: 'parse', targetId: 'p', expectedRevision: 1, idempotencyKey: 'approval-0001' }
+    for (const id of ['reviewer', 'editor', 'outside']) expect((await invoke(r, 'requestJob', id, params)).success).toBe(false)
+    r.insert('memberships', 'approved', { workspaceId: 'w', userId: 'approved', role: 'owner', status: 'active' })
+    expect((await invoke(r, 'requestJob', 'approved', params)).success).toBe(false)
+    r.billingAllowedUserIds = 'approved'
+    expect((await invoke(r, 'requestJob', 'approved', params)).success).toBe(true)
+    expect(enqueueJob).toHaveBeenCalledTimes(1)
+  })
   it('rejects duplicate or filesystem-unsafe storyboard identifiers', () => {
     const board = project().storyboard
     expect(validStoryboard(board)).toBe(true)
@@ -193,6 +227,7 @@ describe('workspace authorization and revisions', () => {
   })
   it('lets a reviewer request a deterministic export after a video is selected', async () => {
     const r = seeded();
+    r.billingAllowedUserIds = 'reviewer';
     (r.get('projects', 'p')!.data.currentAssets as Record<string, string>)['h3:q'] = 'video-a'
     r.insert('assets', 'video-a', { workspaceId: 'w', projectId: 'p', operation: 'h3', targetId: 'q', storageKey: 'projects/p/video.mp4', mimeType: 'video/mp4', sha256: 'a'.repeat(64), byteSize: 100 })
     const params = { projectId: 'p', expectedRevision: 1, operation: 'export', targetId: 'p', idempotencyKey: 'export-0001' }
@@ -263,6 +298,38 @@ describe('result publication', () => {
   }
   const context = { signal: new AbortController().signal, progress: vi.fn(), continue: vi.fn() }
   async function run(r: Records) { return runJob({ type: 'illustory-workflow', payload: { jobId: 'j' } } as never, context as never, r.env() as never) }
+  it.each(['parse', 'character', 'scene-anchor', 'voice', 'first-frame', 'h3', 'seedvr2', 'export'] as const)('blocks queued %s after spending approval is revoked, before any provider call', async operation => {
+    const r = seeded()
+    r.insert('memberships', 'revoked', { workspaceId: 'w', userId: 'revoked', role: 'owner', status: 'active' })
+    r.insert('workflow-jobs', 'j', { ...job(operation), requestedByUserId: 'revoked' })
+    const upstream = vi.fn()
+    vi.stubGlobal('fetch', upstream)
+    await expect(run(r)).rejects.toThrow('require approval')
+    expect(upstream).not.toHaveBeenCalled()
+    expect(integrationCall).not.toHaveBeenCalled()
+    expect(r.get('workflow-jobs', 'j')?.data.status).toBe('failed')
+  })
+  it('rechecks workspace membership before starting paid work', async () => {
+    const r = seeded()
+    r.get('memberships', 'owner')!.data.status = 'suspended'
+    r.insert('workflow-jobs', 'j', { ...job('parse') })
+    const upstream = vi.fn()
+    vi.stubGlobal('fetch', upstream)
+    await expect(run(r)).rejects.toThrow('Workspace permission was revoked')
+    expect(upstream).not.toHaveBeenCalled()
+  })
+  it('finishes monitoring an already-submitted export after revocation without starting new work or email', async () => {
+    privateResponse('succeeded', 'video/mp4')
+    const r = seeded()
+    r.emailFrom = 'studio@example.com'
+    r.get('projects', 'p')!.data.notifyOnExport = true
+    r.insert('workflow-jobs', 'j', { ...job('export'), targetType: 'project', targetId: 'p', providerJobId: 'remote', requestedByUserId: 'revoked' })
+    await run(r)
+    expect(r.get('workflow-jobs', 'j')?.data.status).toBe('succeeded')
+    expect(r.get('workflow-jobs', 'j')?.data.notificationStatus).toBe('failed')
+    expect(integrationCall).not.toHaveBeenCalled()
+    expect(vi.mocked(fetch).mock.calls.every(([, init]) => init?.method !== 'POST')).toBe(true)
+  })
   it('does not publish an old revision or failed provider result', async () => {
     privateResponse()
     const stale = seeded(); stale.insert('workflow-jobs', 'j', { ...job() }); stale.get('projects', 'p')!.data.revision = 2
@@ -345,6 +412,7 @@ describe('result publication', () => {
     privateResponse('succeeded', 'video/mp4')
     integrationCall.mockResolvedValue({ id: 'mail-1' })
     const r = seeded()
+    r.billingAllowedUserIds = 'reviewer'
     r.emailFrom = 'studio@example.com'
     r.get('projects', 'p')!.data.notifyOnExport = true
     r.insert('users', 'owner', { email: 'owner@example.com' })
@@ -360,6 +428,7 @@ describe('result publication', () => {
   it('keeps the export but does not email a former owner', async () => {
     privateResponse('succeeded', 'video/mp4')
     const r = seeded()
+    r.billingAllowedUserIds = 'reviewer'
     r.emailFrom = 'studio@example.com'
     r.get('projects', 'p')!.data.notifyOnExport = true
     r.get('memberships', 'owner')!.data.status = 'suspended'

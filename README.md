@@ -49,6 +49,21 @@ The Studio refreshes authorized job and asset state every three seconds. Browser
 
 ## Roles
 
+**Workspace role is not spending authorization.** By default, only the DeepSpace
+app owner (`OWNER_USER_ID`) can start sponsored work. New users may sign in,
+create/edit their own projects and view workspace assets, but cannot spend the
+owner's API, Catalog or private-engine funds. The table below describes workspace
+permissions; generation, reference/voice discovery and export also require
+separate app-owner spending approval.
+
+For a trusted reviewer, obtain their verified user ID from Settings and explicitly
+approve it using the server-only `BILLING_ALLOWED_USER_IDS` secret (comma-separated
+exact IDs), then redeploy. Removing an ID and redeploying revokes future spending.
+Adding a workspace member never grants this approval. Approved users still need
+the workspace role shown below. This is an invitation gate, **not a dollar quota**;
+do not approve unlimited public access or describe it as capped review credit.
+See [spending boundary and review access](docs/SPENDING_ACCESS.md).
+
 | Operation | Owner | Editor | Reviewer | Viewer |
 |---|---:|---:|---:|---:|
 | View workspace, projects, jobs and assets | Yes | Yes | Yes | Yes |
@@ -67,7 +82,7 @@ All endpoints require a server-side bearer token. `PUT /v1/catalog-assets/{jobId
 
 ## Verification so far
 
-`npm run validate` passes 38 TypeScript tests, and `npm run build` passes. Earlier local DeepSpace browser suites passed six smoke tests and a four-role flow with persisted edits. The private adapter's `test_contract.py` passes 14 offline tests with the original source configured; Azure no-model checks cover auth, job idempotency, PostgreSQL, Blob checksum and Range. In the live app, the owner completed structured storyboard parsing and published generated character and scene-anchor images through the authenticated private media route. Both are saved as version 1 and render in the Studio. The updated Azure adapter reports healthy, and unauthenticated private job access returns 401. Voice, first-frame generation, H3, enhancement and export have not been verified live. Vast SSH and GPU execution remain off, so the server explicitly blocks H3 and SeedVR2.
+`npm run validate` passes 62 tests plus TypeScript checks, and `npm run build` passes. Earlier local DeepSpace browser suites passed six smoke tests and a four-role flow with persisted edits. The private adapter's `test_contract.py` passes 14 offline tests with the original source configured; Azure no-model checks cover auth, job idempotency, PostgreSQL, Blob checksum and Range. In the live app, the owner completed structured storyboard parsing and published generated character and scene-anchor images through the authenticated private media route. Both are saved as version 1 and render in the Studio. The updated Azure adapter reports healthy, and unauthenticated private job access returns 401. Voice, first-frame generation, H3, enhancement and export have not been verified live. Vast SSH and GPU execution remain off, so the server explicitly blocks H3 and SeedVR2.
 
 ## Tradeoffs and limits
 
