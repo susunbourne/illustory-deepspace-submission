@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useAuth } from 'deepspace'
 import { Activity, ArrowLeft, Clapperboard, Film, Image as ImageIcon, Layers, LoaderCircle, Plus, RefreshCw, Save, Settings2, Sparkles, Users, X } from 'lucide-react'
 import { action, assetObjectUrl } from '../../../illustory/client'
+import { voiceText } from '../../../illustory/creative'
 import { assetSlot, emptyStoryboard } from '../../../illustory/types'
 import type { Asset, Character, Operation, Project, Row, Scene, Shot, Storyboard, VideoReference, WorkflowJob, Workspace, WorkspaceRole } from '../../../illustory/types'
 import './studio.css'
@@ -71,6 +72,8 @@ export default function Studio() {
   const role = activeWorkspace?.role
   const canEdit = role === 'owner' || role === 'editor'
   const canGenerate = role === 'owner'
+  const voiceLine = (character: Character) => voiceDrafts[character.id] ?? voiceText(draftBoard, character)
+  const revision = project?.data.revision
   const canReview = role === 'owner' || role === 'reviewer'
   const assetById = useMemo(() => new Map(assets.map(a => [a.recordId, a])), [assets])
   const currentAsset = (operation: Operation, targetId: string) => assetById.get(project?.data.currentAssets[assetSlot(operation, targetId)] ?? '')
@@ -104,6 +107,8 @@ export default function Studio() {
   useEffect(() => { setSessionExpired(false); if (userId) loadWorkspaces().catch(e => setMessage(String(e))) }, [userId, loadWorkspaces])
   useEffect(() => { if (!workspaceId) return; loadProjects(workspaceId).catch(e => setMessage(String(e))); action<List<{ userId: string; role: WorkspaceRole; status: string }>>('listMembers', { workspaceId }).then(r => setMembers(r.records)).catch(() => {}) }, [workspaceId, loadProjects])
   useEffect(() => { if (!projectId) { setProject(null); return }; loadProject(projectId, true).catch(e => setMessage(String(e))) }, [projectId, loadProject])
+  useEffect(() => { setVoiceDrafts({}) }, [projectId])
+  useEffect(() => { if (revision != null) setMessage(previous => /^Saved revision \d+/.test(previous) && !previous.startsWith(`Saved revision ${revision}`) ? '' : previous) }, [revision])
   useEffect(() => {
     if (!projectId || !userId || sessionExpired) return
     const timer = setInterval(() => { loadProject(projectId).catch(e => {
@@ -194,15 +199,17 @@ export default function Studio() {
             {canGenerate && <button className="is-action" disabled={!!busy} onClick={loadVoices}>Load ElevenLabs voices</button>}
             <div className="is-card-grid">{draftBoard.characters.map(c => <article className="is-card" key={c.id}>
               <Media asset={currentAsset('character', c.id)} label="Character reference" />
-              <div className="is-card-body"><input value={c.name} disabled={!canEdit} onChange={e => changeCharacter(c.id, { name: e.target.value })} /><label>English/source name<input value={c.nameEn ?? ''} disabled={!canEdit} onChange={e => changeCharacter(c.id, { nameEn: e.target.value })} /></label><label>Personality / visual archetype<textarea value={c.personality ?? c.description} disabled={!canEdit} onChange={e => changeCharacter(c.id, { description: e.target.value })} rows={3} /></label>
+              <div className="is-card-body"><input value={c.name} disabled={!canEdit} onChange={e => changeCharacter(c.id, { name: e.target.value })} />
+                {canGenerate && <button className="is-action full" disabled={!!busy || dirty} onClick={() => generate('character', c.id)}><Sparkles size={14} /> Generate character image</button>}
+                <label>English/source name<input value={c.nameEn ?? ''} disabled={!canEdit} onChange={e => changeCharacter(c.id, { nameEn: e.target.value })} /></label><label>Personality / visual archetype<textarea value={c.personality ?? c.description} disabled={!canEdit} onChange={e => changeCharacter(c.id, { description: e.target.value })} rows={3} /></label>
                 <details><summary>Stable visual identity</summary>{['nationality', 'gender', 'age_range', 'hair', 'face', 'body', 'costume'].map(key => <label key={key}>{key.replace('_', ' ')}<input value={c.appearance?.[key] ?? ''} disabled={!canEdit} onChange={e => changeCharacter(c.id, { appearance: { ...c.appearance, [key]: e.target.value } })} /></label>)}</details>
                 <VersionPicker assets={assets} operation="character" targetId={c.id} currentId={project.data.currentAssets[assetSlot('character', c.id)]} onSelect={selectAsset} canReview={canReview} />
-                {canGenerate && <button className="is-action full" disabled={!!busy || dirty} onClick={() => generate('character', c.id)}><Sparkles size={14} /> Generate reference</button>}
                 <label className="is-field-label">VOICE</label>
                 <select value={c.voiceId ?? ''} disabled={!canEdit} onChange={e => changeCharacter(c.id, { voiceId: e.target.value })}><option value="">Select a catalog voice</option>{voiceChoices.map(v => <option value={v.id} key={v.id}>{v.name}</option>)}</select>
                 {voiceChoices.find(v => v.id === c.voiceId)?.previewUrl && <a href={voiceChoices.find(v => v.id === c.voiceId)?.previewUrl} target="_blank" rel="noreferrer">Preview selected voice</a>}
-                <textarea rows={2} maxLength={240} placeholder="Enter one line to preview this character's voice (max 240 characters)" value={voiceDrafts[c.id] ?? ''} onChange={e => setVoiceDrafts(previous => ({ ...previous, [c.id]: e.target.value }))} />
-                {canGenerate && <button className="is-action full" disabled={!!busy || dirty || !c.voiceId || !voiceDrafts[c.id]?.trim()} onClick={() => generate('voice', c.id, { text: voiceDrafts[c.id] })}>Generate voice reference</button>}
+                <label className="is-field-label">SAMPLE LINE</label>
+                <textarea rows={2} maxLength={240} placeholder="Enter one line to preview this character's voice (max 240 characters)" value={voiceLine(c)} onChange={e => setVoiceDrafts(previous => ({ ...previous, [c.id]: e.target.value }))} />
+                {canGenerate && <button className="is-action full" disabled={!!busy || dirty || !c.voiceId || !voiceLine(c).trim()} onClick={() => generate('voice', c.id, { text: voiceLine(c) })}>Generate voice reference</button>}
                 <Media asset={currentAsset('voice', c.id)} label="Selected voice reference" />
                 <VersionPicker assets={assets} operation="voice" targetId={c.id} currentId={project.data.currentAssets[assetSlot('voice', c.id)]} onSelect={selectAsset} canReview={canReview} />
               </div>
