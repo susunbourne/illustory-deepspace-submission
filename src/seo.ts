@@ -23,7 +23,8 @@ declare const __DEEPSPACE_SITE_ORIGIN__: string | undefined
 
 export const seo = {
   title: 'Illustory Studio | AI video production workflow',
-  description: 'Turn a script into an editable storyboard, versioned visuals, generated motion, and a finished cut with a traceable production history.',
+  description:
+    'Turn a script into an editable storyboard, versioned visuals, generated motion, and a finished cut with a traceable production history.',
   /** Public origin for canonical URLs, og:url, and the sitemap — no trailing
    *  slash. Replace with the custom domain once one is attached, e.g.
    *  'https://www.example.com'. */

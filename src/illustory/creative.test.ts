@@ -1,14 +1,41 @@
 import { describe, expect, it } from 'vitest'
-import { chatText, voiceText } from './creative'
-import { parseCharacterBible, parseOriginalStoryboard } from './original-creative'
-import { characterReply, sceneReply } from './original-creative.test'
+import { voiceText } from './creative'
+import type { Character, Storyboard } from './types'
 
-describe('Catalog creative response boundary', () => {
-  it('extracts chat text and selects character dialogue from motion beats', () => {
-    const bible = parseCharacterBible(JSON.stringify(characterReply))
-    const board = parseOriginalStoryboard(JSON.stringify(sceneReply), bible)
-    expect(chatText({ choices: [{ message: { content: JSON.stringify(sceneReply) } }] })).toContain('scene_visual_anchor')
-    expect(voiceText(board, bible[0])).toBe('')
+const character: Character = { id: 'ari', name: 'Ari', description: '' }
+const board = (dialogue: string, beatDialogue?: string): Storyboard => ({
+  characters: [character],
+  scenes: [
+    {
+      id: 'scene',
+      title: 'Station',
+      description: '',
+      shots: [
+        {
+          id: 'shot',
+          title: 'Arrival',
+          description: '',
+          durationSeconds: 3,
+          speaker: 'Ari',
+          dialogue,
+          beats: beatDialogue
+            ? [{ id: 'beat', description: '', durationSeconds: 3, speaker: 'Ari', dialogue: beatDialogue }]
+            : [],
+        },
+      ],
+    },
+  ],
+})
+
+describe('character voice reference text', () => {
+  it('uses beat dialogue without repeating the shot-level line', () => {
+    expect(voiceText(board('Repeated line', 'The train is here.'), character)).toBe('The train is here.')
   })
-  it('rejects an empty response', () => { expect(() => chatText({ choices: [] })).toThrow('no text') })
+  it('falls back to shot dialogue and excludes other speakers', () => {
+    expect(voiceText(board('Hello.'), character)).toBe('Hello.')
+    expect(voiceText(board('Hello.'), { ...character, name: 'Someone else' })).toBe('')
+  })
+  it('bounds the voice preview to 240 characters', () => {
+    expect(voiceText(board('a'.repeat(300)), character)).toHaveLength(240)
+  })
 })

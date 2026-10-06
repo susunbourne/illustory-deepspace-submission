@@ -62,7 +62,9 @@ test.describe('Smoke tests', () => {
     test.setTimeout(90_000)
     const [owner] = await users(['Illustory owner'])
     await owner.page.goto('/studio')
-    await expect(owner.page.getByRole('heading', { name: 'From script to finished scene.' })).toBeVisible({ timeout: 15000 })
+    await expect(owner.page.getByRole('heading', { name: 'From script to finished scene.' })).toBeVisible({
+      timeout: 15000,
+    })
     const workspaceName = `Smoke studio ${Date.now()}`
     await owner.page.getByRole('button', { name: 'New workspace' }).click()
     await owner.page.getByPlaceholder('Studio workspace name').fill(workspaceName)
@@ -70,8 +72,12 @@ test.describe('Smoke tests', () => {
     await expect(owner.page.getByText('OWNER ACCESS')).toBeVisible()
     const projectName = `Smoke scene ${Date.now()}`
     await owner.page.getByPlaceholder('Project title').fill(projectName)
-    await owner.page.getByPlaceholder('Brief synopsis for visual research').fill('A quiet meeting at a station.')
-    await owner.page.getByPlaceholder('Paste a short script to begin').fill('INT. STATION - NIGHT. Ari waits beneath a clock.')
+    await owner.page
+      .getByPlaceholder('Brief synopsis for visual research')
+      .fill('A quiet meeting at a station.')
+    await owner.page
+      .getByPlaceholder('Paste a short script to begin')
+      .fill('INT. STATION - NIGHT. Ari waits beneath a clock.')
     await owner.page.getByRole('button', { name: 'Create project' }).click()
     await expect(owner.page.getByRole('heading', { name: projectName })).toBeVisible()
     await owner.page.getByRole('button', { name: 'Cast', exact: true }).click()
@@ -90,7 +96,9 @@ test.describe('Smoke tests', () => {
     await expect(owner.page.getByRole('button', { name: projectName })).toBeVisible({ timeout: 15000 })
     await owner.page.getByRole('button', { name: projectName }).click()
     await expect(owner.page.getByRole('heading', { name: projectName })).toBeVisible({ timeout: 15000 })
-    await expect(owner.page.locator('textarea.is-script')).toHaveValue('INT. STATION - NIGHT. Ari waits beneath a clock.')
+    await expect(owner.page.locator('textarea.is-script')).toHaveValue(
+      'INT. STATION - NIGHT. Ari waits beneath a clock.',
+    )
     await owner.page.getByRole('button', { name: 'Shots', exact: true }).click()
     await expect(owner.page.locator('.is-shot-content > input')).toHaveValue('Clock close-up')
     if (process.env.ILLUSTORY_SCREENSHOT_PATH) {

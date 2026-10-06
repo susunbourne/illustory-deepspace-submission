@@ -11,7 +11,9 @@ import { PRERENDER_ROUTES, render } from './prerender-entry'
 describe('public pages prerender', () => {
   it.each(PRERENDER_ROUTES)('%s renders to static HTML with a title and a body', (route) => {
     const html = render(route)
-    expect(html, `${route} rendered no <title> — render <Seo {...seo} path="${route}" /> first`).toMatch(/<title>[^<]+<\/title>/)
+    expect(html, `${route} rendered no <title> — render <Seo {...seo} path="${route}" /> first`).toMatch(
+      /<title>[^<]+<\/title>/,
+    )
     expect(html).toContain('name="description"')
     const at = html.indexOf('<div data-testid="app-root"')
     expect(at, `${route} rendered no app-root — src/pages/_app.tsx root markup changed?`).toBeGreaterThan(-1)

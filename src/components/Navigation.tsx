@@ -114,9 +114,7 @@ export default function Navigation() {
               />
               <DropdownMenuContent align="end" className="w-56">
                 <DropdownMenuLabel>
-                  <div className="truncate font-medium text-foreground">
-                    {user.name || 'Signed in'}
-                  </div>
+                  <div className="truncate font-medium text-foreground">{user.name || 'Signed in'}</div>
                   <div
                     data-testid="nav-user-email"
                     className="truncate text-xs font-normal text-muted-foreground"
@@ -147,7 +145,11 @@ export default function Navigation() {
             aria-label="Toggle menu"
             aria-expanded={mobileMenuOpen}
           >
-            {mobileMenuOpen ? <X className="h-4 w-4" aria-hidden /> : <Menu className="h-4 w-4" aria-hidden />}
+            {mobileMenuOpen ? (
+              <X className="h-4 w-4" aria-hidden />
+            ) : (
+              <Menu className="h-4 w-4" aria-hidden />
+            )}
           </button>
         </div>
 

@@ -72,7 +72,10 @@ export function registerActionRoutes(app: Hono<AppContext>, resolveAuth: Resolve
       if (!seeded.success) return c.json(seeded as unknown as Record<string, unknown>)
     }
     const result = await action({ userId: auth.userId, params, tools, env: c.env, callerJwt })
-    return c.json(result as unknown as Record<string, unknown>, !result.success && result.code === 'spending_not_approved' ? 403 : 200)
+    return c.json(
+      result as unknown as Record<string, unknown>,
+      !result.success && result.code === 'spending_not_approved' ? 403 : 200,
+    )
   })
 }
 
@@ -126,13 +129,10 @@ function createActionTools(env: Env, userId: string, callerJwt: string): ActionT
   }
 
   return {
-    create: (collection, data, recordId) =>
-      execTool('records.create', { collection, data, recordId }),
-    update: (collection, recordId, data) =>
-      execTool('records.update', { collection, recordId, data }),
+    create: (collection, data, recordId) => execTool('records.create', { collection, data, recordId }),
+    update: (collection, recordId, data) => execTool('records.update', { collection, recordId, data }),
     remove: (collection, recordId) => execTool('records.delete', { collection, recordId }),
-    deleteWhere: (collection, where, limit) =>
-      execTool('records.deleteWhere', { collection, where, limit }),
+    deleteWhere: (collection, where, limit) => execTool('records.deleteWhere', { collection, where, limit }),
     get: (collection, recordId) => execTool('records.get', { collection, recordId }),
     query: (collection, options) => execTool('records.query', { collection, ...options }),
     integration: callIntegration,

@@ -40,7 +40,8 @@ const REACT_ERROR_TABLE: Record<number, Omit<DecodedReactError, 'code' | 'docsUr
   },
   301: {
     title: 'Too many re-renders',
-    explanation: 'React hit its render limit because the component updated state while rendering, which triggers an infinite render loop.',
+    explanation:
+      'React hit its render limit because the component updated state while rendering, which triggers an infinite render loop.',
     hint: 'Don’t call setState (or a mutation) directly in the render body. Move it into an event handler or an effect with the right dependencies.',
   },
   321: {
@@ -114,9 +115,7 @@ export function ErrorScreen({ error, onReset }: ErrorScreenProps) {
           </span>
         </div>
 
-        <h1 className="text-lg font-semibold tracking-tight">
-          {decoded?.title ?? 'Something went wrong'}
-        </h1>
+        <h1 className="text-lg font-semibold tracking-tight">{decoded?.title ?? 'Something went wrong'}</h1>
         {decoded?.explanation && (
           <p className="mt-1.5 text-sm text-muted-foreground">{decoded.explanation}</p>
         )}

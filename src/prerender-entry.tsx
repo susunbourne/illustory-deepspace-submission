@@ -36,8 +36,7 @@ const App = app.default
 function Layout() {
   return (
     <>
-      <App />{' '}
-      <></>
+      <App /> <></>
     </>
   )
 }

@@ -180,9 +180,7 @@ export function registerAuthAndIntegrationRoutes(app: Hono<AppContext>): void {
     if ((await resolveAppRole(c.env, auth.userId)) !== 'admin') {
       return c.json({ error: 'forbidden' }, 403)
     }
-    const stub = c.env.RECORD_ROOMS.get(
-      c.env.RECORD_ROOMS.idFromName(`app:${c.env.DEEPSPACE_APP_ID}`),
-    )
+    const stub = c.env.RECORD_ROOMS.get(c.env.RECORD_ROOMS.idFromName(`app:${c.env.DEEPSPACE_APP_ID}`))
     // Forward verbatim: the DO dispatches on the original pathname.
     return stub.fetch(c.req.raw)
   })
@@ -286,8 +284,7 @@ export function registerPlatformProxyRoutes(app: Hono<AppContext>): void {
     // A same-origin GET/HEAD with no bearer is identified by the app-origin
     // session cookie, so a private file URL renders in <img>/<audio>/<video>.
     // The fallback lives here, not in resolveAuth, which also gates writes.
-    const auth =
-      (await resolveAuth(c.req.raw, c.env)) ?? (await resolveSessionReadAuth(c.req.raw, c.env))
+    const auth = (await resolveAuth(c.req.raw, c.env)) ?? (await resolveSessionReadAuth(c.req.raw, c.env))
     const userId = auth?.userId ?? null
 
     const url = new URL(c.req.url)
@@ -347,8 +344,7 @@ export function registerPlatformProxyRoutes(app: Hono<AppContext>): void {
     const forwardedParams = new URLSearchParams(url.search)
     forwardedParams.set('appId', c.env.DEEPSPACE_APP_ID)
     const queryString = forwardedParams.toString()
-    const apiPath =
-      url.pathname.replace('/_deepspace/', '/api/') + (queryString ? `?${queryString}` : '')
+    const apiPath = url.pathname.replace('/_deepspace/', '/api/') + (queryString ? `?${queryString}` : '')
 
     const headers = new Headers(c.req.raw.headers)
     headers.delete('x-user-id')

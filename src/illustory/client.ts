@@ -8,7 +8,11 @@ export async function action<T>(name: string, params: Record<string, unknown> = 
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
     body: JSON.stringify(params),
   })
-  const body = await response.json().catch(() => null) as { success: boolean; data?: T; error?: string } | null
+  const body = (await response.json().catch(() => null)) as {
+    success: boolean
+    data?: T
+    error?: string
+  } | null
   if (!response.ok || !body?.success) throw new Error(body?.error ?? `Request failed (${response.status})`)
   return body.data as T
 }

@@ -46,10 +46,18 @@ export default function SettingsPage() {
               <dt className="text-muted-foreground">DeepSpace user ID</dt>
               <dd className="mt-1 flex flex-wrap items-center gap-2 text-foreground">
                 <code className="select-all break-all rounded bg-muted px-2 py-1">{userId ?? '—'}</code>
-                <Button variant="secondary" disabled={!userId} onClick={copyUserId}>Copy ID</Button>
+                <Button variant="secondary" disabled={!userId} onClick={copyUserId}>
+                  Copy ID
+                </Button>
               </dd>
-              <p className="mt-1 text-xs text-muted-foreground">Share this ID with a workspace owner to join their workspace.</p>
-              {copyStatus && <p role="status" className="mt-1 text-xs text-muted-foreground">{copyStatus}</p>}
+              <p className="mt-1 text-xs text-muted-foreground">
+                Share this ID with a workspace owner to join their workspace.
+              </p>
+              {copyStatus && (
+                <p role="status" className="mt-1 text-xs text-muted-foreground">
+                  {copyStatus}
+                </p>
+              )}
             </div>
           </dl>
 

@@ -12,8 +12,4 @@ import { usersSchema } from './schemas/users-schema'
 import { settingsSchema } from './schemas/admin-schema'
 import { illustorySchemas } from './schemas/illustory-schemas'
 
-export const schemas: CollectionSchema[] = [
-  usersSchema,
-  settingsSchema,
-  ...illustorySchemas,
-]
+export const schemas: CollectionSchema[] = [usersSchema, settingsSchema, ...illustorySchemas]

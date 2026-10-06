@@ -1,27 +1,89 @@
 export type WorkspaceRole = 'owner' | 'editor' | 'reviewer' | 'viewer'
-export type Operation = 'parse' | 'character' | 'scene-anchor' | 'voice' | 'first-frame' | 'h3' | 'seedvr2' | 'export'
+export type Operation =
+  | 'parse'
+  | 'character'
+  | 'scene-anchor'
+  | 'voice'
+  | 'first-frame'
+  | 'h3'
+  | 'seedvr2'
+  | 'export'
 export type TargetType = 'project' | 'character' | 'scene' | 'shot'
 export type JobStatus = 'queued' | 'running' | 'succeeded' | 'failed' | 'cancelled' | 'stale'
 
 export interface Character {
-  id: string; name: string; description: string; nameEn?: string; personality?: string
-  appearance?: Record<string, string>; voiceId?: string; referenceImagePath?: string; loraUrl?: string
+  id: string
+  name: string
+  description: string
+  nameEn?: string
+  personality?: string
+  appearance?: Record<string, string>
+  voiceId?: string
+  referenceImagePath?: string
+  loraUrl?: string
 }
-export interface Beat { id: string; description: string; durationSeconds: number; speaker?: string; dialogue?: string }
-export interface CharacterEmotion { characterId: string; emotion: 'tense' | 'melancholy' | 'fearful' | 'determined' | 'neutral' }
+export interface Beat {
+  id: string
+  description: string
+  durationSeconds: number
+  speaker?: string
+  dialogue?: string
+}
+export interface CharacterEmotion {
+  characterId: string
+  emotion: 'tense' | 'melancholy' | 'fearful' | 'determined' | 'neutral'
+}
 export interface Shot {
-  id: string; title: string; description: string; durationSeconds: number
-  characters?: string[]; shotType?: string; cameraAngle?: string; timeOfDay?: string
-  location?: string; action?: string; environmentDetails?: string; emotions?: CharacterEmotion[]
-  dialogue?: string; speaker?: string; narration?: string; beats?: Beat[]
+  id: string
+  title: string
+  description: string
+  durationSeconds: number
+  characters?: string[]
+  shotType?: string
+  cameraAngle?: string
+  timeOfDay?: string
+  location?: string
+  action?: string
+  environmentDetails?: string
+  emotions?: CharacterEmotion[]
+  dialogue?: string
+  speaker?: string
+  narration?: string
+  beats?: Beat[]
   referenceVideo?: { title: string; url: string }
-  trimStartSeconds?: number; trimEndSeconds?: number
+  trimStartSeconds?: number
+  trimEndSeconds?: number
 }
-export interface Scene { id: string; title: string; description: string; sceneVisualAnchor?: string; shots: Shot[] }
-export interface Storyboard { title?: string; chapter?: string; characters: Character[]; scenes: Scene[] }
-export interface VideoReference { title: string; url: string; thumbnail?: string }
-export interface Workspace { [key: string]: unknown; name: string; ownerId: string }
-export interface Membership { [key: string]: unknown; workspaceId: string; userId: string; role: WorkspaceRole; status: 'active' | 'suspended' }
+export interface Scene {
+  id: string
+  title: string
+  description: string
+  sceneVisualAnchor?: string
+  shots: Shot[]
+}
+export interface Storyboard {
+  title?: string
+  chapter?: string
+  characters: Character[]
+  scenes: Scene[]
+}
+export interface VideoReference {
+  title: string
+  url: string
+  thumbnail?: string
+}
+export interface Workspace {
+  [key: string]: unknown
+  name: string
+  ownerId: string
+}
+export interface Membership {
+  [key: string]: unknown
+  workspaceId: string
+  userId: string
+  role: WorkspaceRole
+  status: 'active' | 'suspended'
+}
 export interface Project {
   [key: string]: unknown
   workspaceId: string
@@ -74,7 +136,10 @@ export interface WorkflowJob {
   error: string
   requestedByUserId: string
   catalogAttempted?: boolean
-  catalogResult?: { storyboard?: Storyboard; asset?: { storageKey: string; mimeType: string; sha256: string; byteSize: number } }
+  catalogResult?: {
+    storyboard?: Storyboard
+    asset?: { storageKey: string; mimeType: string; sha256: string; byteSize: number }
+  }
   notificationStatus?: 'none' | 'attempted' | 'sent' | 'failed'
   notificationError?: string
   request: Record<string, unknown>
