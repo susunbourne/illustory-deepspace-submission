@@ -17,9 +17,9 @@ The DeepSpace app uses GitHub source. The portal currently shows **Task submitte
 | Direct OpenAI Responses from the Worker | Two-stage Character Bible and scene/shot parsing with strict JSON Schema | Offline tests and owner live parse |
 | DeepSpace Catalog | GPT Image 2 character and scene images; ElevenLabs voice selection/speech; optional YouTube search and Email | Character and scene images live; other paid paths still need live evidence |
 | Private Azure adapter | Authenticated HTTPS, idempotent PostgreSQL job ledger, private Blob media, reference-conditioned GPT Image 2 first frames, FFmpeg export | Contract tests and no-model Azure health/auth; live first frame pending |
-| Vast GPU | H3 and optional SeedVR2 | Disabled in the deployed app pending a separately capped render test |
+| Vast GPU | H3; SeedVR2 installation separate | H3 enabled after Azure-to-Vast SSH and node/model checks; first paid render still to verify |
 
-The adapter image `firstframe-20261006-1` is deployed to `illustory-private-adapter-dev`. Its worker is enabled, GPU execution is disabled, and the Container App has `minReplicas=0`, `maxReplicas=1`. DeepSpace production has `PRIVATE_WORKFLOW_EXECUTION_ENABLED=1`; `PRIVATE_WORKFLOW_GPU_ENABLED` is unset. The private client allows up to 60 seconds for a cold start. The latest adapter revision passed `/health`; an unauthenticated job request returned 401. No paid image or GPU call was made by the agent during this rollout.
+The adapter image `firstframe-20261006-1` is deployed to `illustory-private-adapter-dev`. Its worker and GPU execution are enabled on healthy revision 0000003, and the Container App has `minReplicas=0`, `maxReplicas=1`. DeepSpace production has `PRIVATE_WORKFLOW_EXECUTION_ENABLED=1`; `PRIVATE_WORKFLOW_GPU_ENABLED=1` is deployed. Azure-to-Vast dedicated SSH and ComfyUI node/model discovery passed without inference; SeedVR2 is not installed. The private client allows up to 60 seconds for a cold start. The latest adapter revision passed `/health`; an unauthenticated job request returned 401. No paid image or GPU call was made by the agent during this rollout.
 
 ## Verification commands and results
 
@@ -32,7 +32,7 @@ npm run build     # passed
 & 'D:\transfer\UNC\AfterUNC\Illustory.ai\illustory_integrated_v1_4_0\illustory_integrated_v1_4_0\.venv\Scripts\python.exe' -m pytest -q test_contract.py  # 14 passed
 ```
 
-The owner previously completed a live parse and selected character and scene images. The next live check is one first-frame job in **Shots** using those selected references. Capture the DeepSpace job ID, private job ID, pinned revision, output asset version, image quality, duration, and actual OpenAI charge. A failure must leave the current asset unchanged. Do not claim an end-to-end video run from this deployed app until H3, optional enhancement, and export are independently exercised.
+The owner previously completed a live parse and selected character and scene images. The owner subsequently generated first frames and published versions are visible in Studio. The next live check is one H3 job in **Edit & Export** using a selected first frame. Capture the DeepSpace job ID, private job ID, pinned revision, output asset version, image quality, duration, and actual OpenAI charge. A failure must leave the current asset unchanged. Do not claim an end-to-end video run from this deployed app until H3, optional enhancement, and export are independently exercised.
 
 ## Costs and limits
 
