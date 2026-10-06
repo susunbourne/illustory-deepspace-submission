@@ -3,7 +3,7 @@ import { PRERENDER_ROUTES, render } from './prerender-entry'
 
 /**
  * Every public page must render without a browser — that is what lets
- * prerender.ts turn it into static HTML at `vite build`. `deepspace dev`
+ * tooling/prerender.ts turn it into static HTML at `vite build`. `deepspace dev`
  * never prerenders, so without this test the first sign of a page touching
  * `window`, `localStorage`, or `matchMedia` during render would be a failed
  * deploy. Runs in Node in about a second (`npm run test:unit`).

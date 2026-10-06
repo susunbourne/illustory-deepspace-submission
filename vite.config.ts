@@ -4,12 +4,14 @@ import react from '@vitejs/plugin-react'
 import generouted from '@generouted/react-router/plugin'
 import { cloudflare } from '@cloudflare/vite-plugin'
 import checker from 'vite-plugin-checker'
+import tailwindcss from '@tailwindcss/postcss'
 import { deepspaceBuild } from 'deepspace/build'
-import { prerender } from './prerender.ts'
+import { prerender } from './tooling/prerender.ts'
 
 const appDir = fileURLToPath(new URL('.', import.meta.url))
 
 export default defineConfig({
+  css: { postcss: { plugins: [tailwindcss()] } },
   plugins: [
     react(),
     generouted(),
@@ -24,7 +26,7 @@ export default defineConfig({
     // Prerenders the public pages listed in src/prerender-entry.tsx into static
     // HTML at `vite build`, stamps their <Seo> head, and writes sitemap.xml plus
     // the robots.txt Sitemap line from src/seo.ts — so crawlers that do not run
-    // JavaScript read real content. See prerender.ts; delete this line for a
+    // JavaScript read real content. See tooling/prerender.ts; delete this line for a
     // plain SPA.
     prerender(),
     // Runs the Rules of Hooks lint (see eslint.config.js) automatically, so

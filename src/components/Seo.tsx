@@ -33,7 +33,7 @@ export interface SeoProps {
  * Renders the page's `<title>`, description, canonical, Open Graph, and
  * Twitter card tags. React 19 hoists `<title>`, `<meta>`, and `<link>` into
  * `<head>` from anywhere in the tree, so render it as the first child of the
- * page. prerender.ts stamps the same output into the static HTML at build, so
+ * page. tooling/prerender.ts stamps the same output into the static HTML at build, so
  * crawlers that do not execute JavaScript see it too.
  *
  * Routes that render no `<Seo>` must render a `<title>` of their own (the

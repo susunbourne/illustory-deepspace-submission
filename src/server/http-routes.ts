@@ -370,7 +370,7 @@ const matches = (pathname: string, prefixes: readonly string[]): boolean =>
 const API_PREFIXES = ['/api']
 
 /**
- * The plain SPA shell prerender.ts (app root) writes beside the prerendered
+ * The plain SPA shell tooling/prerender.ts writes beside the prerendered
  * pages: the built index.html with #root still empty. Extensionless, so the
  * asset layer's auto-trailing-slash serves `_spa.html` at it.
  */

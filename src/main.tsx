@@ -13,7 +13,7 @@ async function main() {
 
   // Let the router finish loading the first route's code-split module before
   // rendering. Until then it renders only a loading fallback — and on a page
-  // prerender.ts wrote at build (the landing), React must hydrate the
+  // tooling/prerender.ts wrote at build (the landing), React must hydrate the
   // HTML already on screen with the real page, or it discards that markup and
   // repaints.
   if (!router.state.initialized) {

@@ -15,6 +15,12 @@ npm run build
 Unit tests use synthetic data and substituted provider responses. They do not
 spend model/GPU credits. `npm run format` applies the repository formatter.
 
+Use npm with the committed `package-lock.json`. Prettier reads its options from
+`package.json` and exclusions from `.prettierignore`. `npm run test:unit` and
+`npm run test:watch` explicitly load `tests/vitest.config.ts`; running bare
+`vitest` would instead load the app's Vite configuration. The build helper lives
+in `tooling/prerender.ts`, imported by the root `vite.config.ts`.
+
 ## Start the app
 
 ```sh

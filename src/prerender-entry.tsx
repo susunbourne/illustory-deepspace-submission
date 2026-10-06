@@ -1,5 +1,5 @@
 /**
- * Build-time render entry for prerender.ts (at the app root). Never shipped to
+ * Build-time render entry for tooling/prerender.ts. Never shipped to
  * the browser and never run by `deepspace dev`.
  *
  * PAGES lists the public pages — the ones at the top level of src/pages/ that
@@ -22,7 +22,7 @@ import { createMemoryRouter, RouterProvider } from 'react-router-dom'
 import * as app from './pages/_app'
 import Landing from './pages/index'
 
-// prerender.ts reads `origin` (canonical URLs, sitemap) and `noindex` from here.
+// tooling/prerender.ts reads `origin` (canonical URLs, sitemap) and `noindex` from here.
 export { seo } from './seo'
 
 export const PAGES: Record<string, ComponentType> = {
@@ -42,7 +42,7 @@ function Layout() {
 }
 
 /** Render one route. React 19 hoists <title>/<meta>/<link> to the START of the
- *  output, before _app's root element; prerender.ts splits them apart. */
+ *  output, before _app's root element; tooling/prerender.ts splits them apart. */
 export function render(route: string): string {
   const router = createMemoryRouter(
     [

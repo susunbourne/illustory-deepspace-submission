@@ -31,7 +31,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url'
 import { build as viteBuild, type Plugin, type ResolvedConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
-const appDir = fileURLToPath(new URL('.', import.meta.url))
+const appDir = fileURLToPath(new URL('..', import.meta.url))
 const ENTRY = 'src/prerender-entry.tsx'
 const SHELL_FILE = '_spa.html'
 const ROOT_PLACEHOLDER = '<div id="root"></div>'

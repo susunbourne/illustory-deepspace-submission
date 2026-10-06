@@ -63,6 +63,19 @@ example project and a generation test. No provider keys need to be shared.
 
 ## Read the code
 
+```text
+src/       Application UI, server actions, jobs and domain logic
+tests/     Browser tests and unit-test runner configuration
+tooling/   Build helpers (public-page prerendering)
+public/    Static assets and response headers
+docs/      Setup, architecture and verification evidence
+```
+
+Root files are the app entry points and automatically discovered tool settings.
+This repository uses npm; formatting settings live in `package.json`, and
+Tailwind/PostCSS is configured in `vite.config.ts`. Unit tests remain alongside
+the source they cover; run them with `npm run test:unit`.
+
 Start with these files, in order:
 
 1. [Domain types](src/illustory/types.ts) and [model output schema](src/illustory/structured-output.ts) — the production plan and asset contract.

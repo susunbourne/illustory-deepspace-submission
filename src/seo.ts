@@ -5,7 +5,7 @@
  * Two consumers read this file, so the values can never disagree:
  *   - `<Seo {...seo} path="/" />` in src/pages/index.tsx renders them at
  *     runtime (React 19 hoists <title>/<meta>/<link> into <head>);
- *   - prerender.ts (app root, via vite.config.ts) stamps them into the static
+ *   - tooling/prerender.ts (via vite.config.ts) stamps them into the static
  *     HTML at `vite build`, so crawlers that do not run JavaScript still get a
  *     real title, description, and canonical URL.
  *
@@ -16,7 +16,7 @@
  * publishes a Disallow-all robots.txt and no sitemap).
  */
 
-/** Injected by prerender.ts: `https://<name>.app.space` from wrangler.toml, or
+/** Injected by tooling/prerender.ts: `https://<name>.app.space` from wrangler.toml, or
  *  what `deepspace deploy` passes (staging: spacestest.com). Absent in unit
  *  tests, hence the guard. */
 declare const __DEEPSPACE_SITE_ORIGIN__: string | undefined

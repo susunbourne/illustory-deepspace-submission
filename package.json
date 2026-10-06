@@ -21,9 +21,9 @@
     "test:smoke": "deepspace test run smoke",
     "test:api": "deepspace test run api",
     "test:e2e": "deepspace test run e2e",
-    "test:unit": "vitest run --passWithNoTests",
-    "test:watch": "vitest",
-    "validate": "tsc --noEmit && vitest run --passWithNoTests",
+    "test:unit": "vitest run --config tests/vitest.config.ts",
+    "test:watch": "vitest --config tests/vitest.config.ts",
+    "validate": "tsc --noEmit && npm run test:unit",
     "screenshot": "deepspace test screenshot",
     "type-check": "tsc --noEmit",
     "lint": "eslint .",
@@ -64,6 +64,12 @@
     "vite-plugin-checker": "^0.14.1",
     "vitest": "^4.1.10",
     "wrangler": "^4.79.0"
+  },
+  "prettier": {
+    "semi": false,
+    "singleQuote": true,
+    "printWidth": 110,
+    "trailingComma": "all"
   },
   "private": true
 }
