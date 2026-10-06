@@ -201,7 +201,7 @@ export default function Studio() {
                 <label className="is-field-label">VOICE</label>
                 <select value={c.voiceId ?? ''} disabled={!canEdit} onChange={e => changeCharacter(c.id, { voiceId: e.target.value })}><option value="">Select a catalog voice</option>{voiceChoices.map(v => <option value={v.id} key={v.id}>{v.name}</option>)}</select>
                 {voiceChoices.find(v => v.id === c.voiceId)?.previewUrl && <a href={voiceChoices.find(v => v.id === c.voiceId)?.previewUrl} target="_blank" rel="noreferrer">Preview selected voice</a>}
-                <textarea rows={2} maxLength={240} placeholder="A short line (up to 240 characters) for this shot's voice" value={voiceDrafts[c.id] ?? ''} onChange={e => setVoiceDrafts(previous => ({ ...previous, [c.id]: e.target.value }))} />
+                <textarea rows={2} maxLength={240} placeholder="Enter one line to preview this character's voice (max 240 characters)" value={voiceDrafts[c.id] ?? ''} onChange={e => setVoiceDrafts(previous => ({ ...previous, [c.id]: e.target.value }))} />
                 {canGenerate && <button className="is-action full" disabled={!!busy || dirty || !c.voiceId || !voiceDrafts[c.id]?.trim()} onClick={() => generate('voice', c.id, { text: voiceDrafts[c.id] })}>Generate voice reference</button>}
                 <Media asset={currentAsset('voice', c.id)} label="Selected voice reference" />
                 <VersionPicker assets={assets} operation="voice" targetId={c.id} currentId={project.data.currentAssets[assetSlot('voice', c.id)]} onSelect={selectAsset} canReview={canReview} />
