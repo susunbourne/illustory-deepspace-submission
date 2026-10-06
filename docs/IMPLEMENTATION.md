@@ -52,12 +52,12 @@ DeepSpace RecordRoom holds persistent workspace membership, projects, scripts, s
 | Idempotent request and private submission | Concurrent action test creates one workflow row; adapter contract test repeats the same key and rejects changed input | Implemented offline |
 | Cancelled/failed do not publish | Unit tests; adapter cancellation contract test | Implemented offline |
 | Old media cannot attach to a reparsed storyboard | Parse clears current selections; creative edits invalidate them, trim-only edits preserve them | Implemented offline |
-| Private asset integrity and access | Worker checks HEAD hash/size; adapter path isolation and Range tested | Implemented offline; live media test required |
+| Private asset integrity and access | Worker checks HEAD metadata, then verifies actual bytes for bounded media if an edge intermediary omits the checksum; live character and scene images render through the authenticated route | Implemented and live-checked for images; large-video path remains unverified |
 | GPU execution evidence | Worker persists private phase and actual adapter timestamps; Studio shows job IDs, pinned revision, elapsed time and output checksum | Implemented offline and visually checked; live provider metrics and a paid render remain unverified |
-| OpenAI Responses structured parsing | Original Pydantic fields and enums encoded as strict JSON Schema; server-only key bound in production; offline request/response tests | Implemented and deployed; budgeted live re-test pending |
-| Catalog OpenAI image, ElevenLabs, YouTube and Email | Endpoint schemas checked with official CLI; server-side action/job paths implemented; offline call mocks verify search, voices and speech publication | Implemented offline; paid provider responses and billing unverified |
-| Login, refresh persistence and browser workflow | Intended owner CLI login and app registration succeeded; six browser smoke tests include sign-in, workspace/project creation, manual storyboard editing and refresh persistence | Implemented locally; owner's hands-on review pending |
-| One actual H3/export run | Azure private adapter is reachable, but Vast access, GPU worker and approved paid spend are missing | Not verified |
+| OpenAI Responses structured parsing | Original Pydantic fields and enums encoded as strict JSON Schema; the owner completed one live parse and reviewed the editable storyboard | Implemented and live-checked for one short script |
+| Catalog OpenAI image, ElevenLabs, YouTube and Email | Endpoint schemas checked with official CLI; character and scene images generated and published live; YouTube results appeared in the Studio; voice and mail paths have offline contract checks | Images and YouTube live-checked; voice/mail and billing amounts unverified |
+| Login, refresh persistence and browser workflow | Owner signed in online, created a workspace/project, confirmed refresh persistence, and reviewed generated image versions; earlier local suites covered six smoke cases and four roles | Core owner flow live-checked; live multi-user role tests pending |
+| One actual first-frame/H3/export run | Azure adapter is reachable, but its execution worker is off and Vast access and approved paid spend are missing; the app rejects private jobs before queueing | Not verified; honest runtime block in place |
 | Atomic same-project concurrent edits | RecordRoom action performs read then update without transactional compare-and-swap | Must implement before shared production editing; not needed for one-editor exercise proof |
 
 ## Acceptance criteria for an honest submission
@@ -84,7 +84,7 @@ The [StoryNest](https://github.com/deepdotspace/storynest) reference uses a JobR
 |---|---|---|
 | One editor changes a project at a time | Lost updates from non-atomic read-check-write | Serialize project edits or add transactional CAS |
 | Private adapter can be reached over HTTPS | Jobs fail before execution | Provide private ingress and set Worker secret URL |
-| Catalog parser supports a short representative script under its output cap | The original parser allowed a larger output; Catalog caps `max_tokens` at 16,384 and has no structured-output schema input | Measure a paid one-shot parse, then reject or segment longer scripts explicitly |
+| Direct OpenAI parser supports a short representative script under its output cap | One short live parse succeeded; longer scripts and output cost have not been measured | Measure longer scripts and enforce a documented size/quality boundary |
 | GPU operations are idempotent at adapter boundary | Worker replay could spend twice | Private ledger dedupes; interrupted work is never automatically resubmitted |
 | Studio pilot uses a small job volume | App-wide JobRoom serial execution becomes a bottleneck | Measure queue delay, then partition queues by workspace or project |
 
@@ -92,8 +92,8 @@ The [StoryNest](https://github.com/deepdotspace/storynest) reference uses a JobR
 
 | Gap | Evidence | Severity | Category | Required action | Status |
 |---|---|---|---|---|---|
-| Owner hands-on acceptance | The owner reviewed the local page and reported misplaced status/membership panels; the layout was corrected and role-browser tested, but full stage acceptance is pending | Medium | Must Implement | Review the five Studio stages locally and fix remaining mismatches | In progress |
+| Owner hands-on acceptance | Owner reviewed live Script, Cast, Scenes and Shots; generated character and scene versions display; Edit & Export has no live media yet | Medium | Must Implement | Review remaining stages after private worker is enabled | In progress |
 | Private one-shot execution | Azure adapter HTTPS, PostgreSQL and Blob are verified; Vast public key is not yet accepted and paid spend is not approved | High | Must Implement | Verify Vast access and its new template, approve a single-run ceiling, observe parse→export | Open |
-| Catalog response and cost verification | No authenticated paid call yet; output envelopes and image/voice prices may vary by account | High | Must Implement | One capped call per selected endpoint; record response shape and actual charge | Open |
+| Catalog response and cost verification | Live image responses work, but voice/mail and actual provider charges remain unknown | High | Must Implement | Record actual charges and validate voice/mail only when needed and approved | Open |
 | Concurrent edit atomicity | Server action reads revision then updates separately | Medium | Must Understand | Add serialized/conditional project write before true multi-editor customer use | Open |
 | Kubernetes, Kafka, second model vendor | No concrete pilot requirement | Low | Do Not Build | Avoid until measurements justify | Closed |
