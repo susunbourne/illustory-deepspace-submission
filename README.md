@@ -36,7 +36,7 @@ For a fresh installation, configure `PRIVATE_WORKFLOW_URL` and `PRIVATE_WORKFLOW
 
 ## Representative flow
 
-1. Sign in and create a workspace. The first user is its owner. Add collaborators by their DeepSpace user ID and grant owner/editor/reviewer/viewer.
+1. Sign in and create a workspace. The first user is its owner. For collaborators, have them sign in to this app once and copy their DeepSpace user ID from **Settings**. As owner, open **Workspace settings** beside the workspace selector, paste that ID, and grant owner/editor/reviewer/viewer.
 2. Create a project with a script. `projects` records retain the script, storyboard, revision and selected asset IDs.
 3. The owner requests parsing. `requestJob` pins the revision and snapshot, records an idempotency key, and enqueues a DeepSpace background job. Two Catalog OpenAI calls reproduce Illustory's Character Bible → scene/shot parse order. The original parser and shot rules, full public schema (appearance, scene visual anchor, first-frame action, local environment, motion beats, emotions, dialogue), and character/scene image prompts are included here. The Worker validates JSON and publishes only while the project revision is current. The title/synopsis can also trigger an optional YouTube reference search; links can be attached to shots as research metadata.
 4. Editors adjust the storyboard. A save increments the revision. Owners generate character and scene reference images through the Catalog. The Worker copies their bytes to the protected private media store and publishes versioned metadata. Owners may choose an ElevenLabs voice ID and generate a speech asset for a character. The selected audio is part of the later H3 input snapshot.
