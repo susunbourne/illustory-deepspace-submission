@@ -18,7 +18,7 @@ Browser
        │     ├─ Catalog OpenAI: screenplay structure + character/scene images
        │     ├─ Catalog ElevenLabs: voice list + selected speech
        │     └─ HTTPS + private bearer secret → owner-operated private adapter
-                   ├─ SQLite idempotency ledger + private asset directory
+                   ├─ Azure PostgreSQL idempotency ledger + private Blob media
                    └─ imports original Illustory RealPipeline / ComposerService
                          ├─ reference-conditioned first frame
                          ├─ Vast GPU / ComfyUI H3 and SeedVR2
@@ -34,13 +34,13 @@ Trust boundaries: the browser cannot reach the private adapter or read its token
 1. `src/actions/index.ts` creates a project with a script, empty storyboard, revision 1 and workspace ID. Each edit requires owner/editor membership and an expected revision.
 2. The owner submits a job. The action validates operation/target/dependencies, derives a deterministic job record ID from the project and idempotency key, copies selected asset metadata into an input snapshot, persists a `workflow-jobs` row, and enqueues `illustory-workflow` in JobRoom. Concurrent requests for the same key converge on the same row.
 3. For parse, character images, scene anchors or speech, `src/jobs.ts` calls the relevant DeepSpace Catalog endpoint. Parsing first builds a Character Bible and then supplies it to the scene/shot pass, with the original Illustory system/shot rules and field contract. The Worker validates both JSON results strictly and retains appearance, anchors, first-frame action, local environment, motion beats, emotions and dialogue. Image/audio data URIs are checksum-verified and copied to the protected private adapter. The job records Catalog intent before billing and checkpoints its result before publication. No automatic Catalog retry can create a duplicate bill after an ambiguous crash.
-4. For first frame, H3, SeedVR2 and export, `src/jobs.ts` POSTs the snapshot to the private adapter with the same key, saves its stable ID, polls with `ctx.continue`, and updates user-visible job state. A Worker restart may replay POST safely because the private adapter enforces idempotency. The adapter imports the original reference-conditioned image, GPU and composition pipeline. It maps the full public storyboard fields into the original domain records, writes binaries to a private directory and returns a relative storage key, hash, size and MIME type. Older private parser snapshots remain a compatibility path.
+4. For first frame, H3, SeedVR2 and export, `src/jobs.ts` POSTs the snapshot to the private adapter with the same key, saves its stable ID, polls with `ctx.continue`, and updates user-visible job state. A Worker restart may replay POST safely because the private adapter enforces idempotency. The adapter imports the original reference-conditioned image, GPU and composition pipeline. It maps the full public storyboard fields into the original domain records, writes binaries to private Azure Blob storage and returns a relative storage key, hash, size and MIME type. Older private parser snapshots remain a compatibility path.
 5. The Worker re-reads project revision and cancellation status. For media it also checks HEAD hash/size before creating an immutable asset version. It selects the new version only while the input revision is current. A failed, cancelled or stale job does not select an asset.
 6. The Studio polls authorized actions every three seconds. Images use authenticated asset fetches; video streams through a same-origin, membership-checked route that supports Range.
 
 ## State and dependencies
 
-DeepSpace RecordRoom holds persistent workspace membership, projects, scripts, storyboards, job metadata and asset version metadata. JobRoom holds queue/checkpoint state. The private adapter has a SQLite idempotency ledger and private media directory; its engine imports the original source and uses its existing provider credentials for reference-conditioned first frames, GPU motion, enhancement and export. The browser has only transient edit drafts and object URLs. The public repository contains reviewable script and image prompts, but no proprietary H3/ComfyUI prompt assembly or workflow, customer script, generated binary, or private credential.
+DeepSpace RecordRoom holds persistent workspace membership, projects, scripts, storyboards, job metadata and asset version metadata. JobRoom holds queue/checkpoint state. The Azure private adapter uses the original PostgreSQL cluster for an independent idempotency ledger and private Azure Blob for media; its local test mode uses SQLite. Its engine imports the original source and uses owner-operated credentials for reference-conditioned first frames, GPU motion, enhancement and export. The browser has only transient edit drafts and object URLs. The public repository contains reviewable script and image prompts, but no proprietary H3/ComfyUI prompt assembly or workflow, customer script, generated binary, or private credential.
 
 ## Acceptance evidence and known gaps
 
@@ -55,7 +55,7 @@ DeepSpace RecordRoom holds persistent workspace membership, projects, scripts, s
 | GPU execution evidence | Worker persists private phase and actual adapter timestamps; Studio shows job IDs, pinned revision, elapsed time and output checksum | Implemented offline and visually checked; live provider metrics and a paid render remain unverified |
 | Catalog OpenAI, ElevenLabs, YouTube and Email | Endpoint schemas checked with official CLI; server-side action/job paths implemented; offline call mocks verify search, voices, parse and speech publication | Implemented offline; provider responses and billing unverified |
 | Login, refresh persistence and browser workflow | Intended owner CLI login and app registration succeeded; six browser smoke tests include sign-in, workspace/project creation, manual storyboard editing and refresh persistence | Implemented locally; owner's hands-on review pending |
-| One actual H3/export run | Requires reachable private adapter and approved paid spend | Not verified |
+| One actual H3/export run | Azure private adapter is reachable, but Vast access, GPU worker and approved paid spend are missing | Not verified |
 | Atomic same-project concurrent edits | RecordRoom action performs read then update without transactional compare-and-swap | Must implement before shared production editing; not needed for one-editor exercise proof |
 
 ## Acceptance criteria for an honest submission
@@ -91,7 +91,7 @@ The [StoryNest](https://github.com/deepdotspace/storynest) reference uses a JobR
 | Gap | Evidence | Severity | Category | Required action | Status |
 |---|---|---|---|---|---|
 | Owner hands-on acceptance | The owner reviewed the local page and reported misplaced status/membership panels; the layout was corrected and role-browser tested, but full stage acceptance is pending | Medium | Must Implement | Review the five Studio stages locally and fix remaining mismatches | In progress |
-| Private one-shot execution | No private HTTPS URL, provider credentials or spend approval supplied | High | Must Implement | Connect adapter, approve a single-run ceiling, observe parse→export | Open |
+| Private one-shot execution | Azure adapter HTTPS, PostgreSQL and Blob are verified; Vast public key is not yet accepted and paid spend is not approved | High | Must Implement | Verify Vast access and its new template, approve a single-run ceiling, observe parse→export | Open |
 | Catalog response and cost verification | No authenticated paid call yet; output envelopes and image/voice prices may vary by account | High | Must Implement | One capped call per selected endpoint; record response shape and actual charge | Open |
 | Concurrent edit atomicity | Server action reads revision then updates separately | Medium | Must Understand | Add serialized/conditional project write before true multi-editor customer use | Open |
 | Kubernetes, Kafka, second model vendor | No concrete pilot requirement | Low | Do Not Build | Avoid until measurements justify | Closed |
