@@ -39,6 +39,8 @@ The owner signed in to the CLI and official `app init` minted this checkout's ID
 
 ## Next verification gate
 
+Deferred UX notes from the owner: the first-time OAuth button says **Sign in** even though that action also creates a new DeepSpace account; clarify onboarding copy later without adding a separate password signup flow. The new-project script field is only four visible rows in the sidebar, although the server accepts up to 20,000 characters and the main project editor is larger. A larger creation surface and optional `.txt` import are possible follow-ups. Neither UI change has been implemented.
+
 1. Inspect the owner-created online project for any remaining product/UX mismatches. Authenticated sign-in, project creation and refresh persistence have passed; generation has not.
 2. Confirm the new Vast template's ComfyUI/model paths and attach the dedicated public SSH key to the current Vast instance. The owner's private Azure adapter and the DeepSpace encrypted `PRIVATE_WORKFLOW_URL`/`PRIVATE_WORKFLOW_TOKEN` are already configured; its worker remains off. Never copy those values into this repository.
 3. After setting a separate approved model/GPU cost ceiling, run one short script/one shot from Catalog parse through OpenAI references, an ElevenLabs voice, private first frame and H3, optional SeedVR2, and export. Search optional YouTube references and enable Email export notice if a sender address is available. Record job IDs, revisions, asset hashes, error outcomes, timing and actual bills. Then deliberately edit during a running job and cancel one to verify stale/cancel behavior in the live runtime.
