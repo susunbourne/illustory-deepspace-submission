@@ -33,3 +33,21 @@ remains unchanged. The metadata endpoint lives only in the private adapter.
 TypeScript check and 65 unit tests passed. Adapter contract tests: 11 passed,
 4 skipped because original-engine dependencies are absent in this interpreter.
 No model or GPU generation was invoked by this verification.
+
+## Live verification
+Released public app commit e8e0e77 and private adapter revision 0000004.
+ACR build cj3 completed in 106 seconds; no inference was submitted.
+The authenticated metadata endpoint returned the expected byte size and SHA-256.
+Resumed the SAME export job from Activity. It became succeeded with output v1;
+asset count went from 12 to 13, with no new render request. Browser decoded the
+MP4 at 1920x1080, duration 32.789333 seconds, readyState 4, no media error.
+Playback advanced to 11.742057 seconds before pausing for the user.
+Activity navigation verified ranges 1–6, 7–12, 13–17 with correct boundaries.
+
+Export email status is failed: `Email sender is not configured`. This is a
+separate configuration gap and did not block video publication. No email was
+sent during recovery.
+
+Credential checks found no private key/API key patterns in tracked source and
+no matches to four local secret values in the client bundle. Both checks are
+bounded scans, not a claim of comprehensive security certification.
