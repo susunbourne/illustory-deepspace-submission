@@ -4,6 +4,23 @@ import { runJob } from '../jobs'
 import type { Project, WorkflowJob } from './types'
 import { validStoryboard } from './validation'
 import { characterReply, sceneReply } from './original-creative.test'
+import { verifyPrivateAsset } from './private-workflow'
+
+it('verifies saved catalog bytes when a HEAD intermediary omits integrity metadata', async () => {
+  const bytes = new Uint8Array(100).fill(7)
+  const digest = [...new Uint8Array(await crypto.subtle.digest('SHA-256', bytes))].map(x => x.toString(16).padStart(2, '0')).join('')
+  const fetchMock = vi.fn(async (_url: string, init: RequestInit) => init.method === 'HEAD'
+    ? new Response(null, { headers: { 'Content-Length': '0' } })
+    : new Response(bytes, { headers: { 'Content-Length': '100' } }))
+  vi.stubGlobal('fetch', fetchMock)
+  try {
+    await expect(verifyPrivateAsset({ PRIVATE_WORKFLOW_URL: 'https://private.test', PRIVATE_WORKFLOW_TOKEN: 'test' } as never,
+      { storageKey: 'catalog/p/a.png', sha256: digest, byteSize: 100 }, new AbortController().signal)).resolves.toBeUndefined()
+    expect(fetchMock).toHaveBeenCalledTimes(2)
+    await expect(verifyPrivateAsset({ PRIVATE_WORKFLOW_URL: 'https://private.test', PRIVATE_WORKFLOW_TOKEN: 'test' } as never,
+      { storageKey: 'catalog/p/a.png', sha256: 'a'.repeat(64), byteSize: 100 }, new AbortController().signal)).rejects.toThrow('integrity')
+  } finally { vi.unstubAllGlobals() }
+})
 
 const enqueueJob = vi.hoisted(() => vi.fn(async () => 'queue-1'))
 const integrationCall = vi.hoisted(() => vi.fn())
@@ -123,6 +140,20 @@ describe('workspace authorization and revisions', () => {
     expect(first.success && second.success && (first.data as Stored).recordId).toBe((second.data as Stored).recordId)
     expect(enqueueJob).toHaveBeenCalledTimes(1)
     expect((await invoke(r, 'requestJob', 'owner', { ...params, targetId: 's' })).success).toBe(false)
+  })
+  it('resumes saved paid media only for the owner and current revision', async () => {
+    const r = seeded()
+    const saved = job('character')
+    saved.status = 'failed'
+    saved.catalogAttempted = true
+    saved.catalogResult = { asset: { storageKey: 'catalog/p/saved.png', mimeType: 'image/png', sha256: 'a'.repeat(64), byteSize: 100 } }
+    r.insert('workflow-jobs', 'saved', { ...saved })
+    enqueueJob.mockClear()
+    expect((await invoke(r, 'resumeSavedJob', 'editor', { jobId: 'saved' })).success).toBe(false)
+    expect((await invoke(r, 'resumeSavedJob', 'owner', { jobId: 'saved' })).success).toBe(true)
+    expect(r.get('workflow-jobs', 'saved')?.data.status).toBe('queued')
+    expect(enqueueJob).toHaveBeenCalledTimes(1)
+    expect((await invoke(r, 'resumeSavedJob', 'owner', { jobId: 'saved' })).success).toBe(false)
   })
   it('concurrent requests with the same key create only one workflow row', async () => {
     const r = seeded(), params = { projectId: 'p', expectedRevision: 1, operation: 'character', targetId: 'c', idempotencyKey: 'concurrent-0001' }

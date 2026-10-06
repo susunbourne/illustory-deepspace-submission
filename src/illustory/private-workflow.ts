@@ -51,7 +51,18 @@ export async function fetchPrivateAsset(env: Env, storageKey: string, signal?: A
 export async function verifyPrivateAsset(env: Env, asset: { storageKey: string; sha256: string; byteSize: number }, signal: AbortSignal): Promise<void> {
   const response = await request(env, `/v1/assets/${encodeURIComponent(asset.storageKey)}`, { method: 'HEAD', signal: AbortSignal.any([signal, AbortSignal.timeout(30_000)]) })
   if (response.headers.get('X-Content-Sha256')?.toLowerCase() !== asset.sha256.toLowerCase()
-    || Number(response.headers.get('Content-Length')) !== asset.byteSize) throw new Error('Private asset integrity check failed')
+    || Number(response.headers.get('Content-Length')) !== asset.byteSize) {
+    // Some intermediaries answer HEAD with GET headers and omit the checksum.
+    // For bounded catalog media, verify the stored bytes themselves before
+    // rejecting an already paid-for result. Large video stays on metadata HEAD.
+    if (asset.byteSize > 20 * 1024 * 1024) throw new Error('Private asset integrity check failed')
+    const stored = await request(env, `/v1/assets/${encodeURIComponent(asset.storageKey)}`, {
+      method: 'GET', redirect: 'error', signal: AbortSignal.any([signal, AbortSignal.timeout(30_000)]),
+    })
+    if (Number(stored.headers.get('Content-Length')) > 20 * 1024 * 1024) throw new Error('Private asset integrity check failed')
+    const bytes = new Uint8Array(await stored.arrayBuffer())
+    if (bytes.length !== asset.byteSize || await sha256(bytes) !== asset.sha256.toLowerCase()) throw new Error('Private asset integrity check failed')
+  }
 }
 
 /** Catalog-generated media is copied into private workspace media storage.

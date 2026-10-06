@@ -240,6 +240,28 @@ const cancelJob: ActionHandler<Env> = async ctx => {
   }
   return cancelled
 }
+const resumeSavedJob: ActionHandler<Env> = async ctx => {
+  const id = str(ctx.params.jobId, 100)
+  if (!id) return fail('Job ID required')
+  const found = await ctx.tools.get<WorkflowJob>('workflow-jobs', id)
+  if (!found.success) return fail('Job not found')
+  const job = found.data.record as Row<WorkflowJob>
+  if (!await workspaceAccess(ctx, job.data.workspaceId, ['owner'])) return fail('Owner required', 'forbidden')
+  if (job.data.status !== 'failed' || !['character', 'scene-anchor', 'voice'].includes(job.data.operation)
+    || !job.data.catalogResult?.asset) return fail('No saved media result can be resumed')
+  const project = await ctx.tools.get<Project>('projects', job.data.projectId)
+  if (!project.success || project.data.record.data.workspaceId !== job.data.workspaceId
+    || project.data.record.data.revision !== job.data.inputRevision) return fail('The input revision has changed; saved media cannot be published')
+  const queued = await ctx.tools.update('workflow-jobs', id, { status: 'queued', progress: 0.95, error: '' })
+  if (!queued.success) return queued
+  try {
+    await enqueueJob(ctx.env.JOB_ROOMS, `app:${ctx.env.DEEPSPACE_APP_ID}`, 'illustory-workflow', { jobId: id }, { maxAttempts: 1, enqueuedBy: ctx.userId })
+  } catch {
+    await ctx.tools.update('workflow-jobs', id, { status: 'failed', error: 'Queue unavailable; saved media remains available for another resume' })
+    return fail('Could not resume saved media', 'queue_failed')
+  }
+  return ok({ jobId: id, status: 'queued' })
+}
 const selectAsset: ActionHandler<Env> = async ctx => {
   const projectId = str(ctx.params.projectId, 100), assetId = str(ctx.params.assetId, 100)
   if (!projectId || !assetId) return fail('Project and asset required')
@@ -253,4 +275,4 @@ const selectAsset: ActionHandler<Env> = async ctx => {
   return saved.success ? ok({ currentAssets, revision: p.data.revision + 1 }) : saved
 }
 
-export const actions: Record<string, ActionHandler<Env>> = { listWorkspaces, createWorkspace, listMembers, setMemberRole, listProjects, createProject, getProject, saveProject, setExportNotification, listAssets, listJobs, listVoices, searchReferences, requestJob, cancelJob, selectAsset }
+export const actions: Record<string, ActionHandler<Env>> = { listWorkspaces, createWorkspace, listMembers, setMemberRole, listProjects, createProject, getProject, saveProject, setExportNotification, listAssets, listJobs, listVoices, searchReferences, requestJob, cancelJob, resumeSavedJob, selectAsset }
