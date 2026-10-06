@@ -24,6 +24,25 @@ it('verifies saved catalog bytes when a HEAD intermediary omits integrity metada
 })
 
 const enqueueJob = vi.hoisted(() => vi.fn(async () => 'queue-1'))
+
+it('verifies large exports through authenticated metadata when edge HEAD loses headers', async () => {
+  const asset = { storageKey: 'p/export/output.mp4', sha256: 'a'.repeat(64), byteSize: 22183196 }
+  let metadata = { ...asset }
+  const fetchMock = vi.fn(async (_url: string, init: RequestInit) => init.method === 'HEAD'
+    ? new Response(null, { headers: { 'Content-Length': '0' } })
+    : Response.json(metadata))
+  vi.stubGlobal('fetch', fetchMock)
+  try {
+    const env = { PRIVATE_WORKFLOW_URL: 'https://private.test', PRIVATE_WORKFLOW_TOKEN: 'test' } as never
+    await expect(verifyPrivateAsset(env, asset, new AbortController().signal)).resolves.toBeUndefined()
+    expect(fetchMock.mock.calls[1][0]).toContain('/v1/asset-metadata/')
+    expect(fetchMock.mock.calls[1][1].headers).toMatchObject({ Authorization: 'Bearer test' })
+    for (const wrong of [{ ...asset, byteSize: 1 }, { ...asset, sha256: 'b'.repeat(64) }, { ...asset, storageKey: 'other' }]) {
+      metadata = wrong
+      await expect(verifyPrivateAsset(env, asset, new AbortController().signal)).rejects.toThrow('integrity')
+    }
+  } finally { vi.unstubAllGlobals() }
+})
 const integrationCall = vi.hoisted(() => vi.fn())
 vi.mock('deepspace/worker', () => ({ enqueueJob, buildCronContext: () => ({ integrations: { call: integrationCall } }) }))
 
@@ -328,6 +347,18 @@ describe('result publication', () => {
     expect(r.get('workflow-jobs', 'j')?.data.status).toBe('succeeded')
     expect(r.get('workflow-jobs', 'j')?.data.notificationStatus).toBe('failed')
     expect(integrationCall).not.toHaveBeenCalled()
+    expect(vi.mocked(fetch).mock.calls.every(([, init]) => init?.method !== 'POST')).toBe(true)
+  })
+  it('recovers a failed export using the same private job without rendering again', async () => {
+    privateResponse('succeeded', 'video/mp4')
+    const r = seeded()
+    r.insert('workflow-jobs', 'j', { ...job('export'), status: 'failed', targetType: 'project', targetId: 'p', providerJobId: 'remote' })
+    expect((await invoke(r, 'resumeSavedJob', 'viewer', { jobId: 'j' })).success).toBe(false)
+    expect((await invoke(r, 'resumeSavedJob', 'owner', { jobId: 'j' })).success).toBe(true)
+    await run(r)
+    await run(r)
+    expect(r.get('workflow-jobs', 'j')?.data.status).toBe('succeeded')
+    expect(r.tables.get('assets')?.size).toBe(1)
     expect(vi.mocked(fetch).mock.calls.every(([, init]) => init?.method !== 'POST')).toBe(true)
   })
   it('does not publish an old revision or failed provider result', async () => {

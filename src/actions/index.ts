@@ -138,7 +138,13 @@ const listAssets: ActionHandler<Env> = async ctx => {
 const listJobs: ActionHandler<Env> = async ctx => {
   const id = str(ctx.params.projectId, 100)
   if (!id || !await projectAccess(ctx, id)) return fail('Project access denied', 'forbidden')
-  return ctx.tools.query<WorkflowJob>('workflow-jobs', { where: { projectId: id }, limit: 100 })
+  const result = await ctx.tools.query<WorkflowJob>('workflow-jobs', { where: { projectId: id }, orderBy: 'createdAt', orderDir: 'desc', limit: 500 })
+  if (!result.success) return result
+  // The editor needs status and retry options, not 500 copies of frozen scripts.
+  return ok({ ...result.data, records: result.data.records.map(row => ({ ...row, data: {
+    ...row.data, request: { options: row.data.request.options ?? {} },
+    catalogResult: row.data.catalogResult?.asset ? { asset: row.data.catalogResult.asset } : {},
+  } })) })
 }
 const listVoices: ActionHandler<Env> = async ctx => {
   if (!canSpendOwnerCredits(ctx.env, ctx.userId)) return fail(BILLING_ACCESS_ERROR, 'spending_not_approved')
@@ -256,8 +262,9 @@ const resumeSavedJob: ActionHandler<Env> = async ctx => {
   if (!found.success) return fail('Job not found')
   const job = found.data.record as Row<WorkflowJob>
   if (!await workspaceAccess(ctx, job.data.workspaceId, ['owner'])) return fail('Owner required', 'forbidden')
-  if (job.data.status !== 'failed' || !['character', 'scene-anchor', 'voice'].includes(job.data.operation)
-    || !job.data.catalogResult?.asset) return fail('No saved media result can be resumed')
+  const savedCatalog = ['character', 'scene-anchor', 'voice'].includes(job.data.operation) && !!job.data.catalogResult?.asset
+  const submittedPrivate = ['first-frame', 'h3', 'seedvr2', 'export'].includes(job.data.operation) && !!job.data.providerJobId
+  if (job.data.status !== 'failed' || (!savedCatalog && !submittedPrivate)) return fail('No saved media result can be resumed')
   const project = await ctx.tools.get<Project>('projects', job.data.projectId)
   if (!project.success || project.data.record.data.workspaceId !== job.data.workspaceId
     || project.data.record.data.revision !== job.data.inputRevision) return fail('The input revision has changed; saved media cannot be published')

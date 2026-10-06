@@ -109,6 +109,7 @@ export interface Env extends DOBindings<typeof __DO_MANIFEST__> {
   OWNER_USER_ID: string
   /** Optional comma-separated verified user IDs approved to spend owner funds. */
   BILLING_ALLOWED_USER_IDS?: string
+  SPENDING_PAUSED?: string
   /**
    * Long-lived owner JWT used for developer-billed server calls. User-billed
    * calls always forward the signed-in caller's JWT instead.

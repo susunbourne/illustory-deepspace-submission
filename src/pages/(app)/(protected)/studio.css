@@ -46,3 +46,5 @@
 .is-drawer .is-activity-section{border-top:0;padding-top:0}
 @media(max-width:1200px){.is-studio{grid-template-columns:225px minmax(0,1fr)}}
 @media(max-width:750px){.is-studio{display:block}.is-sidebar{min-height:auto}.is-top{align-items:flex-start;flex-direction:column}.is-main-notice{padding:11px 18px}}
+
+.is-pagination{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:12px 0;margin-bottom:16px;background:#10151c;font-size:12px}.is-pagination span{margin-right:auto}.is-pagination label{display:flex;align-items:center;gap:5px}.is-pagination select{width:auto;min-width:62px;padding:5px}.is-pagination button{padding:6px 10px}.is-drawer .is-pagination{position:sticky;top:0;z-index:2;border-bottom:1px solid #344250}.is-drawer-head{flex-shrink:0}.is-drawer .is-activity-section{flex-shrink:0}.is-add-shot{display:flex;gap:12px;margin-bottom:16px}.is-add-shot select{max-width:320px}.is-export-status{display:grid;gap:8px;padding:14px;border:1px solid #344250;border-radius:8px;margin:12px 0}.is-export-status button{justify-self:start}

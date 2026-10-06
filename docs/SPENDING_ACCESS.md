@@ -79,3 +79,38 @@ RBAC, queued-job revocation, role removal, and completing an existing private jo
 without new work or email after approval is revoked. Generic Catalog/WS bypasses
 are checked too. These are deterministic authorization checks with paid services
 mocked, not claims of a completed live model/GPU render.
+
+## 2026-10-06: operational controls and remaining budget work
+
+`SPENDING_PAUSED=1` (server secret, followed by deploy) stops new sponsored
+provider submissions for everyone, including the app owner. It reuses the same
+server enforcement points as the identity allowlist. Existing private jobs can
+still be monitored/recovered; this is not a provider shutdown or dollar meter.
+The secret is NOT currently set, and no automatic $50 cap is claimed.
+
+The requested OpenAI/Vast/Azure $50 ceilings require an agreed scope and start
+baseline. The scope question is pending. Provider credentials and resource
+ownership must be checked before automating shutdown:
+
+- OpenAI's current official documentation supports enforced **monthly** project
+  spend limits, with a small possible overrun during propagation. A non-resetting
+  lifetime cap is different. The direct parser key and Azure first-frame key
+  must be checked for which OpenAI project each bills.
+- DeepSpace Catalog image, voice, research and email calls bill DeepSpace
+  credits; they are not covered by the owner's direct OpenAI project cap.
+- Azure budgets notify; costs arrive 8–24 hours later and evaluation is daily.
+  Automatic shutdown requires an action, with a conservative buffer. Stopping
+  only this adapter does not stop shared PostgreSQL, storage or registry costs.
+- Stopping Vast compute still leaves disk charges. Destroying the instance is
+  destructive and must not be silently substituted for stopping it.
+
+Official sources checked 2026-10-06:
+https://developers.openai.com/api/docs/guides/spend-limits
+https://learn.microsoft.com/en-us/azure/cost-management-billing/costs/tutorial-acm-create-budgets
+https://console.vast.ai/faq/
+
+| Gap | Evidence | Severity | Category | Required action | Status |
+|---|---|---|---|---|---|
+| Requested $50/provider total cap is not enforced | No provider cost baseline, monitor or shutdown credentials have been configured | High | Must Implement | Confirm project/account scope and lifetime/monthly period; set provider controls and verify shutdown with simulated spend | Awaiting scope; emergency app pause implemented |
+| Literal zero-overrun promise | Azure billing latency, OpenAI propagation and Vast residual storage charges | High | Must Understand | Reserve headroom; state residual charges explicitly | Documented; no hard-zero-overrun claim |
+| Shutting down other projects to save this project's budget | Azure resources are shared with the original system | High | Do Not Build | Target only agreed dedicated resources | No account-wide changes made |

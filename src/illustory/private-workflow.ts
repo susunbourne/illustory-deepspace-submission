@@ -55,7 +55,17 @@ export async function verifyPrivateAsset(env: Env, asset: { storageKey: string; 
     // Some intermediaries answer HEAD with GET headers and omit the checksum.
     // For bounded catalog media, verify the stored bytes themselves before
     // rejecting an already paid-for result. Large video stays on metadata HEAD.
-    if (asset.byteSize > 20 * 1024 * 1024) throw new Error('Private asset integrity check failed')
+    if (asset.byteSize > 20 * 1024 * 1024) {
+      // Cloudflare may turn HEAD into GET. Read authenticated blob properties
+      // as JSON instead of buffering a large video in the Worker.
+      const metadataResponse = await request(env, `/v1/asset-metadata/${encodeURIComponent(asset.storageKey)}`, {
+        method: 'GET', redirect: 'manual', signal: AbortSignal.any([signal, AbortSignal.timeout(60_000)]),
+      })
+      const metadata = await metadataResponse.json() as { storageKey?: string; byteSize?: number; sha256?: string }
+      if (metadata.storageKey !== asset.storageKey || metadata.byteSize !== asset.byteSize || metadata.sha256?.toLowerCase() !== asset.sha256.toLowerCase())
+        throw new Error('Private asset integrity check failed')
+      return
+    }
     const stored = await request(env, `/v1/assets/${encodeURIComponent(asset.storageKey)}`, {
       method: 'GET', redirect: 'manual', signal: AbortSignal.any([signal, AbortSignal.timeout(60_000)]),
     })
