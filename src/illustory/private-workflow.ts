@@ -19,7 +19,7 @@ async function request(env: Env, path: string, init: RequestInit): Promise<Respo
   const response = await fetch(`${root}${path}`, {
     ...init,
     headers: { Authorization: `Bearer ${token}`, ...init.headers },
-    signal: init.signal ?? AbortSignal.timeout(12_000),
+    signal: init.signal ?? AbortSignal.timeout(60_000),
   })
   if (!response.ok) throw new Error(`Private workflow service returned HTTP ${response.status}`)
   return response
@@ -30,14 +30,14 @@ export async function submitPrivateJob(env: Env, jobId: string, job: WorkflowJob
     headers: { 'Content-Type': 'application/json', 'Idempotency-Key': job.idempotencyKey },
     body: JSON.stringify({ id: jobId, workspaceId: job.workspaceId, projectId: job.projectId, operation: job.operation,
       targetType: job.targetType, targetId: job.targetId, inputRevision: job.inputRevision, input: job.request }),
-    signal: AbortSignal.any([signal, AbortSignal.timeout(12_000)]),
+    signal: AbortSignal.any([signal, AbortSignal.timeout(60_000)]),
   })
   const body = await response.json() as { id?: string }
   if (!body.id || typeof body.id !== 'string') throw new Error('Private workflow returned no job ID')
   return body.id
 }
 export async function getPrivateJob(env: Env, providerJobId: string, signal: AbortSignal): Promise<PrivateStatus> {
-  const response = await request(env, `/v1/jobs/${encodeURIComponent(providerJobId)}`, { method: 'GET', signal: AbortSignal.any([signal, AbortSignal.timeout(12_000)]) })
+  const response = await request(env, `/v1/jobs/${encodeURIComponent(providerJobId)}`, { method: 'GET', signal: AbortSignal.any([signal, AbortSignal.timeout(60_000)]) })
   const body = await response.json() as PrivateStatus
   if (!body || body.id !== providerJobId || !['queued', 'running', 'succeeded', 'failed', 'cancelled'].includes(body.status)) throw new Error('Private workflow returned an invalid status')
   return body
@@ -49,7 +49,7 @@ export async function fetchPrivateAsset(env: Env, storageKey: string, signal?: A
   return request(env, `/v1/assets/${encodeURIComponent(storageKey)}`, { method: 'GET', signal, headers: range ? { Range: range } : undefined })
 }
 export async function verifyPrivateAsset(env: Env, asset: { storageKey: string; sha256: string; byteSize: number }, signal: AbortSignal): Promise<void> {
-  const response = await request(env, `/v1/assets/${encodeURIComponent(asset.storageKey)}`, { method: 'HEAD', signal: AbortSignal.any([signal, AbortSignal.timeout(30_000)]) })
+  const response = await request(env, `/v1/assets/${encodeURIComponent(asset.storageKey)}`, { method: 'HEAD', signal: AbortSignal.any([signal, AbortSignal.timeout(60_000)]) })
   if (response.headers.get('X-Content-Sha256')?.toLowerCase() !== asset.sha256.toLowerCase()
     || Number(response.headers.get('Content-Length')) !== asset.byteSize) {
     // Some intermediaries answer HEAD with GET headers and omit the checksum.
@@ -57,7 +57,7 @@ export async function verifyPrivateAsset(env: Env, asset: { storageKey: string; 
     // rejecting an already paid-for result. Large video stays on metadata HEAD.
     if (asset.byteSize > 20 * 1024 * 1024) throw new Error('Private asset integrity check failed')
     const stored = await request(env, `/v1/assets/${encodeURIComponent(asset.storageKey)}`, {
-      method: 'GET', redirect: 'manual', signal: AbortSignal.any([signal, AbortSignal.timeout(30_000)]),
+      method: 'GET', redirect: 'manual', signal: AbortSignal.any([signal, AbortSignal.timeout(60_000)]),
     })
     if (Number(stored.headers.get('Content-Length')) > 20 * 1024 * 1024) throw new Error('Private asset integrity check failed')
     const bytes = new Uint8Array(await stored.arrayBuffer())
