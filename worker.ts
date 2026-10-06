@@ -117,7 +117,8 @@ export interface Env extends DOBindings<typeof __DO_MANIFEST__> {
   PRIVATE_WORKFLOW_TOKEN?: string
   /** OpenAI Responses structured parsing. Encrypted server secret, never a VITE_ variable. */
   OPENAI_API_KEY?: string
-  OPENAI_PARSE_MODEL?: string
+  OPENAI_CHARACTER_MODEL?: string
+  OPENAI_SCENE_MODEL?: string
   /** Verified transactional sender address, configured only through DeepSpace secrets. */
   EMAIL_FROM?: string
   /**

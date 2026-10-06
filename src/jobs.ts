@@ -83,10 +83,11 @@ async function handleWorkflow(job: Job, ctx: JobContext, env: Env): Promise<unkn
         const board = work.request.storyboard
         if (work.operation === 'parse') {
           if (typeof script !== 'string' || !script.trim() || script.length > 20_000) throw new Error('Script must contain 1–20,000 characters for parsing')
-          const model = env.OPENAI_PARSE_MODEL || 'gpt-4o-mini'
-          const characterRaw = await structuredResponse(env.OPENAI_API_KEY, model, 'illustory_characters', characterListSchema, characterMessages(script), 5000, ctx.signal)
+          const characterModel = env.OPENAI_CHARACTER_MODEL || 'gpt-5.5'
+          const sceneModel = env.OPENAI_SCENE_MODEL || 'gpt-5.6'
+          const characterRaw = await structuredResponse(env.OPENAI_API_KEY, characterModel, 'illustory_characters', characterListSchema, characterMessages(script), 5000, ctx.signal)
           const characters = parseCharacterBible(characterRaw)
-          const sceneRaw = await structuredResponse(env.OPENAI_API_KEY, model, 'illustory_storyboard', storyboardSchema, sceneMessages(script, characters), 16000, ctx.signal)
+          const sceneRaw = await structuredResponse(env.OPENAI_API_KEY, sceneModel, 'illustory_storyboard', storyboardSchema, sceneMessages(script, characters), 50000, ctx.signal)
           status = { id: jobId, status: 'succeeded', progress: 1, result: { storyboard: parseOriginalStoryboard(sceneRaw, characters) } }
         } else {
           if (!validStoryboard(board)) throw new Error('Invalid frozen storyboard')

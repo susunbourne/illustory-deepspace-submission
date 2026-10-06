@@ -256,6 +256,8 @@ describe('result publication', () => {
     expect(r.get('projects', 'p')?.data.revision).toBe(2)
     expect(r.get('workflow-jobs', 'j')?.data.outputVersion).toBe(2)
     expect(openAI).toHaveBeenCalledTimes(2)
+    expect(JSON.parse(openAI.mock.calls[0][1].body)).toMatchObject({ model: 'gpt-5.5', max_output_tokens: 5000 })
+    expect(JSON.parse(openAI.mock.calls[1][1].body)).toMatchObject({ model: 'gpt-5.6', max_output_tokens: 50000 })
   })
   it('publishes a catalog voice through private storage once', async () => {
     const data = btoa('a'.repeat(200))
