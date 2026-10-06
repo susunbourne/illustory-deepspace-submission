@@ -165,7 +165,7 @@ export default function Studio() {
 
   return <div className="is-studio">
     <aside className="is-sidebar">
-      <div className="is-brand"><span className="is-brand-mark">I<span>.</span></span><div><strong>ILLUSTORY</strong><small>PRODUCTION STUDIO</small></div></div>
+      <div className="is-brand"><span className="is-brand-mark">I</span><div><strong>ILLUSTORY</strong><small>PRODUCTION STUDIO</small></div></div>
       <div className="is-sidebar-section"><label>WORKSPACE</label><select value={workspaceId} onChange={e => { setWorkspaceId(e.target.value); setProjectId(''); setDrawer(null) }}><option value="">Select workspace</option>{workspaces.map(w => <option key={w.recordId} value={w.recordId}>{w.data.name}</option>)}</select>{!showWorkspaceForm && <button className="is-quiet" onClick={() => setShowWorkspaceForm(true)}><Plus size={14} /> New workspace</button>}{workspaceId && role === 'owner' && <button className="is-quiet" onClick={() => setDrawer('members')}><Settings2 size={14} /> Workspace settings</button>}</div>
       {activeWorkspace && <div className="is-role">{role?.toUpperCase()} ACCESS</div>}
       <button className="is-side-action" onClick={() => setDrawer('activity')}><Activity size={15} /> Activity {activeJobs.length > 0 && <span>{activeJobs.length}</span>}</button>
