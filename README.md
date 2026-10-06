@@ -1,123 +1,118 @@
 # Illustory
 
-**A shared filmmaking workspace for small creative teams.**
+**An AI filmmaking studio that takes a creative team from script to finished video.**
 
-[Open the studio](https://illustory.app.space/studio) · [Run locally](docs/RUNNING.md) · [Architecture](docs/IMPLEMENTATION.md) · [Verification](docs/VERIFICATION.md)
+Creators often move between a chatbot, image and video tools, shared documents, and editing software. Those handoffs make it hard to keep characters consistent, know which shot was approved, or recover a failed render. Illustory gives the team one editable production plan and a versioned history of its assets. Editors shape the story, owners submit paid generation, and reviewers select the final cut.
 
-Illustory turns a script into an editable production plan: characters, scenes,
-shots, dialogue and motion beats. A team can refine that plan, generate reference
-images and video, select versions, and export a cut in the same workspace.
-Owners approve generation, editors develop the storyboard, and reviewers select
-assets. Each generated asset records the job and input revision it came from.
+This is a DeepSpace adaptation of my existing Illustory product, shaped by conversations about AI video work with content creators and e-commerce advertising teams. The live pilot produced four H3 shots and a **32.8-second, 1920×1080 MP4** that played in the deployed Studio. That proves the script-to-export path; it is not a measured claim about customer adoption or team productivity. [Open the Studio](https://illustory.app.space/studio) · [Verification record](docs/VERIFICATION.md)
 
-This is a DeepSpace adaptation of my existing Illustory product. The screenplay
-rules and schema come from that product; the application uses DeepSpace for
-identity, persistence, background jobs and selected external APIs.
+## Find your way around
 
-## The workflow
+| Location | What to inspect |
+|---|---|
+| [Studio UI](src/pages/%28app%29/%28protected%29/studio.tsx) and [styles](src/pages/%28app%29/%28protected%29/studio.css) | Script, Cast, Scenes, Shots, and Edit & Export; version selection and Activity. |
+| [Film domain](src/illustory/) | Product types, creative rules, structured output, provider adapters, and validation. Start with [types](src/illustory/types.ts), [model output schema](src/illustory/structured-output.ts), and [parse mapping](src/illustory/original-creative.ts). |
+| [Persistent schemas](src/schemas/) | DeepSpace user, workspace, membership, project, job, and asset records. |
+| [Server actions](src/actions/index.ts) | Membership, roles, project revisions, job requests, and asset selection. |
+| [Job runner](src/jobs.ts) | Durable execution, provider calls, checkpoints, validation, and publication. |
+| [HTTP routes](src/server/) and [Worker entry](worker.ts) | Authorized media access and DeepSpace runtime wiring. |
+| [Catalog client](src/illustory/catalog.ts) and [private engine client](src/illustory/private-workflow.ts) | External integration contracts. |
+| [Browser tests](tests/) and colocated unit tests | Role, workflow, and rendering checks. |
+| [Build helpers](tooling/) and [static assets](public/) | Public-page prerendering and browser assets. |
+| [Documentation](docs/) | [Architecture](docs/IMPLEMENTATION.md), [setup](docs/RUNNING.md), [verification](docs/VERIFICATION.md), [GPU contract](docs/GPU_EXECUTION.md), and [spending policy](docs/SPENDING_ACCESS.md). |
+
+Root files are the entry points and configuration that the build and deployment tools expect there. npm and `package-lock.json` are the package-management source of truth.
+
+## From script to export
 
 ```mermaid
 flowchart LR
-  Script --> Parse[Character Bible + storyboard]
-  Parse --> Edit[Edit cast, scenes and shots]
-  Edit --> Images[Character and scene references]
-  Images --> Frame[First frame]
-  Frame --> H3[H3 video]
-  H3 --> Cut[Select versions and trim]
-  Cut --> Export[FFmpeg export]
+  A[Project title, synopsis, script] --> B[Optional YouTube references]
+  A --> C[OpenAI strict parse]
+  C --> D[Character Bible + scenes + shots]
+  D --> E[Edit cast, anchors, motion, dialogue]
+  E --> F[Character + scene images]
+  E --> V[Optional ElevenLabs voice]
+  F --> G[Reference-conditioned first frame]
+  G --> H[Minimax H3 shot video]
+  H --> I[Optional SeedVR2]
+  H --> J[Choose versions + trim]
+  I --> J
+  V --> J
+  J --> K[FFmpeg export]
+  K --> L[Authorized playback]
+  K -. If configured .-> M[Email workspace owner]
 ```
 
-YouTube search offers three references during planning. ElevenLabs supplies
-selectable voices and short voice references. Export can notify the workspace
-owner by email when a sender is configured.
+The schema is the handoff contract. Parsing creates a Character Bible, then scenes and shots with locations, cast, a static first-frame description, timed motion beats, dialogue, camera framing, and emotions. People can edit these fields before choosing what to generate. Each asset stores its source revision and version, so a new render does not silently replace an approved one.
 
-**Live evidence:** the owner ran parsing, reference images, first frames and four
-H3 shots. The resulting **32.8-second, 1920×1080 MP4** was exported and played in
-the deployed app. See [verification and remaining gaps](docs/VERIFICATION.md),
-including the export recovery record. SeedVR2 enhancement is optional and is
-not installed on the current GPU instance; email delivery is not configured.
+**Observed live:** parsing, reference images, first frames, four H3 clips, version selection, export, playback, and three YouTube planning links. Voice selection and speech are implemented and unit tested, but have no recorded live acceptance run. SeedVR2 is wired but not installed on the current GPU. Email delivery awaits a sender configuration; export succeeds independently. [Evidence and open items](docs/VERIFICATION.md).
 
-## What runs where
+## How the app runs
 
-| Layer | Used for | Why |
+```mermaid
+flowchart LR
+  Browser[Creator browser] -->|DeepSpace identity| Actions[Worker server actions]
+  Actions -->|Role + spending checks| Records[(DeepSpace RecordRoom)]
+  Actions -->|Pinned input + job ID| Jobs[DeepSpace JobRoom]
+  Jobs -->|Strict JSON Schema| Direct[OpenAI Responses API]
+  Jobs -->|Images + speech| Catalog[DeepSpace Catalog]
+  Actions -->|YouTube research| Catalog
+  Jobs -->|Authenticated idempotent call| Azure[Private Azure adapter]
+  Azure --> Ledger[(Private job ledger)]
+  Azure --> GPU[Vast GPU / ComfyUI / H3]
+  Azure --> Storage[(Private media)]
+  Azure --> FFmpeg[FFmpeg]
+  Jobs -->|Validate result + revision| Records
+  Browser -->|Authorized media proxy| Actions
+  Actions --> Azure
+```
+
+1. A signed-in user chooses a workspace. Every server action checks active membership and the role required for that operation. Paid actions also require separate approval from the app owner.
+2. An edit saves a project revision. A generation request fixes its inputs, checks prerequisites, records an idempotency key, and returns a queryable DeepSpace job ID.
+3. JobRoom calls the appropriate provider or the private adapter and records progress. The adapter gives longer GPU work a stable private ID, so checking an ambiguous result does not automatically submit another render.
+4. Before publishing an asset version, the Worker checks result metadata, cancellation, and the pinned revision. The browser reads job status and media through authorized routes. [Concurrent-edit limitation](docs/IMPLEMENTATION.md#engineering-gaps).
+
+Owner, editor, reviewer, and viewer permissions are enforced on the server. Editors develop the storyboard; reviewers select versions and request export; owners manage membership and generation; viewers inspect the workspace. A workspace role alone never grants use of the app owner's provider credits. See the [exact role table](docs/IMPLEMENTATION.md#roles).
+
+## Integration decisions
+
+| Capability | Value in this workflow | Boundary |
 |---|---|---|
-| DeepSpace Auth, RecordRoom and JobRoom | Login, workspace/project records, jobs and asset versions | Keep identity and durable workflow state on the platform |
-| DeepSpace OpenAI integration | Character and scene reference images | Generate visual references inside the production flow |
-| DeepSpace ElevenLabs integration | Voice catalog and speech references | Choose a consistent voice for a character |
-| DeepSpace YouTube integration | Three optional search results | Keep visual research attached to the project |
-| DeepSpace Email integration | Export-ready notification to the workspace owner | Let the owner know when delivery is ready |
-| Direct OpenAI Responses API | Character Bible, then scenes/shots with strict JSON Schema | The Catalog chat contract used in this build did not expose strict schema output |
-| Private Illustory service on Azure and Vast | Reference-conditioned first frames, H3, private media and FFmpeg | Reuse the existing GPU workflow and keep large media behind workspace authorization |
+| **DeepSpace Auth + RecordRoom** | Login, workspaces, project state, roles, jobs, and asset versions persist across refreshes. | SDK primitives, not Catalog integrations. |
+| **DeepSpace JobRoom** | Long-running work has a durable ID, status, pinned input, and recovery path. | The browser does not hold a render request open. |
+| **DeepSpace OpenAI image integration** | Generates character and scene references with `gpt-image-2`. | Catalog's image contract fits this step. |
+| **DeepSpace ElevenLabs integration** | Lists voice IDs and creates a short speech reference for a selected voice. | Optional; this build does not clone voices. |
+| **DeepSpace YouTube integration** | Returns up to three links from a project's title and synopsis. | Optional research beside the production plan. |
+| **DeepSpace Email integration** | Can notify the workspace owner when an export is ready. | Implemented; delivery awaits sender configuration. |
+| **Direct OpenAI Responses API** | Parses my Character Bible and storyboard with provider-enforced strict JSON Schema. | The Catalog chat contract available to this build did not expose the schema control this parser needs. The key stays in a server secret. |
+| **Private Azure + Vast engine** | Builds reference-conditioned first frames, runs my Minimax H3/ComfyUI workflow, stores private media, and exports through FFmpeg. | DeepSpace handles identity, orchestration, and asset publication; the existing GPU workflow runs on a separately operated service. Its implementation and credentials stay outside this repo. |
 
-The public code includes the parse/image prompts, structured output schemas,
-frontend, server authorization, orchestration, integration clients and tests.
-The private GPU implementation, model files and credentials are outside this
-repository. [Private API boundary](docs/GPU_EXECUTION.md).
+I developed and tuned the private H3 workflow before this adaptation. In earlier runs I observed approximately **90% shorter generation time** while reviewing output quality, but this repository has no controlled comparison. I would repeat matched shots on the same hardware and report model/workflow versions, GPU time, cost, and human quality scores before treating that percentage as a benchmark. [Current verification limits](docs/VERIFICATION.md).
 
-## Review access
+Catalog image generation fits character and scene references. A shot's first frame has a different requirement: it must follow the selected visual references and the shot's composition, so I kept that stage in my reference-conditioned private engine alongside H3. The public repository still shows the authenticated call, pinned inputs, result checks, and asset publication.
 
-Signing in does not grant access to the owner's projects or generation credits.
-Workspace membership and spending approval are separate. A reviewer can share
-their user ID from **Settings** with the app owner to arrange access to the
-example project and a generation test. No provider keys need to be shared.
+I left out payment checkout because this is a controlled evaluation pilot. Job status uses authorized polling rather than broad real-time subscriptions, so the current UI does not offer simultaneous text editing. Project writes need an atomic revision guard before several editors can safely save the same project concurrently. Automatic provider dollar caps also remain open; approval and a manual pause switch are the current spending controls. Adding services solely to increase the integration count would not help this workflow.
 
-## Read the code
+## Product and GTM judgment
 
-```text
-src/       Application UI, server actions, jobs and domain logic
-tests/     Browser tests and unit-test runner configuration
-tooling/   Build helpers (public-page prerendering)
-public/    Static assets and response headers
-docs/      Setup, architecture and verification evidence
-```
+The discovery was a workflow problem: AI tools could generate individual assets, but teams still had to coordinate scripts, cast, shots, approvals, and versions across several interfaces. My hypothesis was that a structured, editable production plan would make those handoffs easier to see and repeat. I built the original Illustory workflow and adapted a focused slice to DeepSpace so a developer can inspect the schema, service boundaries, and working output.
 
-Root files are the app entry points and automatically discovered tool settings.
-This repository uses npm; formatting settings live in `package.json`, and
-Tailwind/PostCSS is configured in `vite.config.ts`. Unit tests remain alongside
-the source they cover; run them with `npm run test:unit`.
+The first live experiment established that a script can reach a playable export. The next experiment is with an invited creative team: measure time from brief to approved cut, regenerations per shot, cost per accepted clip, and where collaborators leave the flow. Those numbers would support an efficiency or adoption claim; one completed pilot project cannot. That is how I would present and distribute a developer tool as well: show the useful path, identify what was measured, and learn from real users.
 
-Start with these files, in order:
-
-1. [Domain types](src/illustory/types.ts) and [model output schema](src/illustory/structured-output.ts) — the production plan and asset contract.
-2. [Server actions](src/actions/index.ts) — membership, roles, revisions and job submission.
-3. [Job runner](src/jobs.ts) — provider dispatch, checkpoints, validation and publication.
-4. [Studio](src/pages/%28app%29/%28protected%29/studio.tsx) — the five editing stages and Activity panel.
-
-`src/server/` and `worker.ts` wire the DeepSpace HTTP and Durable Object runtime.
-[Architecture notes](docs/IMPLEMENTATION.md) explain the data model and tradeoffs.
-
-## Local checks
-
-Use a Node version supported by `package.json` and npm 11.6 or newer.
+## Run and review
 
 ```sh
 npm ci
 npm run validate
 npm run lint
+npm run format:check
 npm run build
+npm run dev
 ```
 
-These checks do not call paid providers. To run the app, authenticate with
-DeepSpace and run `npm run dev`. Generation also needs configured server secrets
-and access to the private engine; a clone alone cannot render video.
-[Setup, configuration and deployment](docs/RUNNING.md).
+Local use needs a DeepSpace login. Paid generation also needs server-side secrets, spending approval, and the private engine. A clone cannot render video on its own. [Setup and deployment](docs/RUNNING.md).
 
-## Scope and tradeoffs
+The deployed app is [illustory.app.space/studio](https://illustory.app.space/studio). Signing in does not expose the owner's projects or credits. A reviewer can provide their DeepSpace user ID from Settings so the owner can grant review-workspace access and, separately, approve any paid test. The export is served through workspace-authorized playback. I have not copied the 22 MB MP4 into this public repository or embedded a public media URL. Its playback is documented in the [verification notes](docs/VERIFICATION.md) and [export recovery record](docs/EXPORT_RECOVERY.md).
 
-- Text parsing uses the original creative rules with strict structured output.
-  Images and speech use Catalog integrations where their input contracts fit.
-- Job status refreshes every three seconds through authorized server actions.
-  Live collaborative text editing is not implemented.
-- Each job pins inputs and rejects stale results. Concurrent edits to the same
-  project still need an atomic revision check before a multi-editor production rollout.
-- Payment checkout was left out of this evaluation build. Review access is
-  controlled by an account allowlist; automatic dollar caps are not yet active.
-
-## Working with a coding agent
-
-I supplied the existing workflow, schema, creative rules and private-engine
-boundary, and directed the adaptation. The agent built the DeepSpace app,
-integrations, authorization and tests, and investigated deployment failures.
-I exercised the live UI, checked login and persistence, reviewed generated
-assets, and ran the video workflow. The agent subsequently recovered the export
-and verified playback. [Evidence and limits](docs/VERIFICATION.md).
+I supplied the existing product flow, schemas, creative rules, and private-engine boundary, and directed the coding agent's DeepSpace adaptation. The agent implemented the UI, platform records and jobs, integrations, authorization, and tests; I reviewed product behavior and initiated the live model/GPU run. We traced a failed export publication to media integrity validation, recovered the same private result without another GPU render, and verified browser playback. The code and limitations are open for review; GPU nodes, model files, customer media, and credentials remain private.
