@@ -57,7 +57,7 @@ export async function verifyPrivateAsset(env: Env, asset: { storageKey: string; 
     // rejecting an already paid-for result. Large video stays on metadata HEAD.
     if (asset.byteSize > 20 * 1024 * 1024) throw new Error('Private asset integrity check failed')
     const stored = await request(env, `/v1/assets/${encodeURIComponent(asset.storageKey)}`, {
-      method: 'GET', redirect: 'error', signal: AbortSignal.any([signal, AbortSignal.timeout(30_000)]),
+      method: 'GET', redirect: 'manual', signal: AbortSignal.any([signal, AbortSignal.timeout(30_000)]),
     })
     if (Number(stored.headers.get('Content-Length')) > 20 * 1024 * 1024) throw new Error('Private asset integrity check failed')
     const bytes = new Uint8Array(await stored.arrayBuffer())

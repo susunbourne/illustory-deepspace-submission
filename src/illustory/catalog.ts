@@ -18,7 +18,7 @@ export async function generateCatalogImage(call: IntegrationCall, prompt: string
   if (url.protocol !== 'https:' || url.username || url.password || ![
     'openai.com', 'openaiusercontent.com', 'blob.core.windows.net',
   ].some(domain => host === domain || host.endsWith(`.${domain}`))) throw new Error('OpenAI returned an untrusted image URL')
-  const response = await fetch(url, { redirect: 'error', signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(30_000)]) : AbortSignal.timeout(30_000) })
+  const response = await fetch(url, { redirect: 'manual', signal: signal ? AbortSignal.any([signal, AbortSignal.timeout(30_000)]) : AbortSignal.timeout(30_000) })
   if (!response.ok) throw new Error(`OpenAI hosted image returned HTTP ${response.status}`)
   const mimeType = response.headers.get('Content-Type')?.split(';', 1)[0].toLowerCase()
   if (mimeType !== 'image/png' && mimeType !== 'image/jpeg') throw new Error('OpenAI hosted image has an unsupported media type')

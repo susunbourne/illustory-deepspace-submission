@@ -115,6 +115,8 @@ export interface Env extends DOBindings<typeof __DO_MANIFEST__> {
   /** Private workflow service URL and token. Set through DeepSpace secrets, never VITE_ variables. */
   PRIVATE_WORKFLOW_URL?: string
   PRIVATE_WORKFLOW_TOKEN?: string
+  /** Enable paid private execution only after the Azure/Vast worker is actually online. */
+  PRIVATE_WORKFLOW_EXECUTION_ENABLED?: string
   /** OpenAI Responses structured parsing. Encrypted server secret, never a VITE_ variable. */
   OPENAI_API_KEY?: string
   OPENAI_CHARACTER_MODEL?: string

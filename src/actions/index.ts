@@ -168,6 +168,8 @@ const requestJob: ActionHandler<Env> = async ctx => {
   if (ctx.params.expectedRevision !== p.data.revision) return fail('Project changed; reload before generating', 'revision_conflict')
   if (operation === 'parse' && p.data.script.length > 20_000) return fail('Script must be at most 20,000 characters for this parser')
   if (operation !== 'parse' && (!ctx.env.PRIVATE_WORKFLOW_URL || !ctx.env.PRIVATE_WORKFLOW_TOKEN)) return fail('Private media service is not configured', 'service_unavailable')
+  if (['first-frame', 'h3', 'seedvr2', 'export'].includes(operation) && ctx.env.PRIVATE_WORKFLOW_EXECUTION_ENABLED !== '1')
+    return fail('Private shot execution is not enabled yet. Connect and verify the Azure/Vast worker before starting this job.', 'service_unavailable')
   const targetType = targetFor[operation]
   if ((targetType === 'project' && targetId !== projectId) || (targetType === 'character' && !p.data.storyboard.characters.some(c => c.id === targetId))
     || (targetType === 'scene' && !p.data.storyboard.scenes.some(s => s.id === targetId))

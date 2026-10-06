@@ -17,6 +17,7 @@ it('verifies saved catalog bytes when a HEAD intermediary omits integrity metada
     await expect(verifyPrivateAsset({ PRIVATE_WORKFLOW_URL: 'https://private.test', PRIVATE_WORKFLOW_TOKEN: 'test' } as never,
       { storageKey: 'catalog/p/a.png', sha256: digest, byteSize: 100 }, new AbortController().signal)).resolves.toBeUndefined()
     expect(fetchMock).toHaveBeenCalledTimes(2)
+    expect(fetchMock.mock.calls[1][1].redirect).toBe('manual')
     await expect(verifyPrivateAsset({ PRIVATE_WORKFLOW_URL: 'https://private.test', PRIVATE_WORKFLOW_TOKEN: 'test' } as never,
       { storageKey: 'catalog/p/a.png', sha256: 'a'.repeat(64), byteSize: 100 }, new AbortController().signal)).rejects.toThrow('integrity')
   } finally { vi.unstubAllGlobals() }
@@ -31,6 +32,7 @@ class Records {
   tables = new Map<string, Map<string, Stored>>()
   failNextJobSuccess = false
   emailFrom = ''
+  executionEnabled = true
   insert(collection: string, id: string, data: Record<string, unknown>) {
     if (!this.tables.has(collection)) this.tables.set(collection, new Map())
     this.tables.get(collection)!.set(id, { recordId: id, data })
@@ -82,7 +84,7 @@ class Records {
   }
   env() {
     return {
-      DEEPSPACE_APP_ID: 'test-app', OWNER_USER_ID: 'owner', APP_NAME: 'test-app', PRIVATE_WORKFLOW_URL: 'https://private.test', PRIVATE_WORKFLOW_TOKEN: 'test-token', EMAIL_FROM: this.emailFrom, OPENAI_API_KEY: 'test-only',
+      DEEPSPACE_APP_ID: 'test-app', OWNER_USER_ID: 'owner', APP_NAME: 'test-app', PRIVATE_WORKFLOW_URL: 'https://private.test', PRIVATE_WORKFLOW_TOKEN: 'test-token', PRIVATE_WORKFLOW_EXECUTION_ENABLED: this.executionEnabled ? '1' : '0', EMAIL_FROM: this.emailFrom, OPENAI_API_KEY: 'test-only',
       JOB_ROOMS: {}, RECORD_ROOMS: { idFromName: (name: string) => name, get: () => ({ fetch: async (request: Request) => {
         const { tool, params } = await request.json() as { tool: string; params: Record<string, unknown> }
         return Response.json(await this.execute(tool, params))
@@ -140,6 +142,16 @@ describe('workspace authorization and revisions', () => {
     expect(first.success && second.success && (first.data as Stored).recordId).toBe((second.data as Stored).recordId)
     expect(enqueueJob).toHaveBeenCalledTimes(1)
     expect((await invoke(r, 'requestJob', 'owner', { ...params, targetId: 's' })).success).toBe(false)
+  })
+  it('refuses shot execution while the private worker is disabled', async () => {
+    const r = seeded()
+    r.executionEnabled = false
+    r.get('projects', 'p')!.data.currentAssets = { 'scene-anchor:s': 'anchor', 'character:c': 'character' }
+    const result = await invoke(r, 'requestJob', 'owner', { projectId: 'p', expectedRevision: 1,
+      operation: 'first-frame', targetId: 'q', idempotencyKey: 'shot-request-0001' })
+    expect(result.success).toBe(false)
+    expect(result.error).toContain('not enabled')
+    expect(r.tables.get('workflow-jobs')?.size ?? 0).toBe(0)
   })
   it('resumes saved paid media only for the owner and current revision', async () => {
     const r = seeded()
