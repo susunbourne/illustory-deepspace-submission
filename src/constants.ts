@@ -1,5 +1,5 @@
 /** App name — replaced by the CLI during scaffolding */
-export const APP_NAME = 'illustory-deepspace-submission'
+export const APP_NAME = 'Illustory.ai'
 
 /** Immutable app identity — data scope keys to this, so renames never
  *  strand your records.
