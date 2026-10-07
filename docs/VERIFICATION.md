@@ -17,7 +17,7 @@ local tests. It is the current status reference for this repository.
 | Activity pagination | All 17 jobs visible across ranges 1–6, 7–12 and 13–17 | Large-history performance |
 | ElevenLabs speech | Implementation and deterministic response tests | Recorded live voice-generation acceptance |
 | Completion email | Export reports sender-not-configured independently of video success | Sender setup and actual delivery |
-| Review access email | One request per signed-in user, fixed recipient, and no automatic permission grant passed local tests | Sender configuration and live email delivery |
+| Review access email | One request per signed-in user, fixed recipient, and no automatic permission grant passed local tests. A one-message provider preflight rejected an unverified sender domain; no message was delivered and the Catalog charged $0.013 | Accepted sender configuration, live email delivery and deployment |
 | SeedVR2 | Private operation is wired | Installation and a real enhancement run |
 
 The owner initiated the live model and GPU generation. The agent verified the

@@ -46,6 +46,8 @@ This button requires both `EMAIL_FROM` (an accepted sender) and
 `REVIEW_ACCESS_EMAIL` (the owner's notification inbox). Without them, the UI
 states that email requests are unavailable. A live delivery test remains
 necessary before describing it as operational.
+An institutional sender-domain preflight was rejected as unverified on
+October 7; the application was not redeployed with that sender.
 
 To allow new generation, set the complete approved ID list using
 `npx deepspace secrets set BILLING_ALLOWED_USER_IDS --stdin`, then redeploy.
