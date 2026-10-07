@@ -990,6 +990,11 @@
   white-space: nowrap;
   font-size: 11px;
 }
+.is-main-notice a {
+  color: #d1e7f5;
+  white-space: nowrap;
+  text-decoration: underline;
+}
 .is-drawer-backdrop {
   position: fixed;
   inset: 0;

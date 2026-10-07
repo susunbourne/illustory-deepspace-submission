@@ -41,18 +41,18 @@ Use DeepSpace's encrypted secrets store. Supply values interactively or over
 standard input; do not put keys in source, shell arguments or `VITE_` variables.
 Secret changes require redeployment; restart local development to reload them.
 
-| Setting | Purpose |
-|---|---|
-| `OPENAI_API_KEY` | Direct structured parsing; never sent to the browser |
-| `PRIVATE_WORKFLOW_URL` | HTTPS endpoint for the private adapter |
-| `PRIVATE_WORKFLOW_TOKEN` | Server-to-server adapter credential |
-| `PRIVATE_WORKFLOW_EXECUTION_ENABLED=1` | Enable private first-frame and export jobs |
-| `PRIVATE_WORKFLOW_GPU_ENABLED=1` | Enable Vast operations after checking the GPU worker |
-| `BILLING_ALLOWED_USER_IDS` | Optional comma-separated exact user IDs approved for sponsored work |
-| `SPENDING_PAUSED=1` | Block new sponsored calls, including the owner's calls |
-| `EMAIL_FROM` | Sender accepted by the Catalog email provider |
-| `REVIEW_ACCESS_EMAIL` | Fixed recipient for review-access requests; never set by the browser |
-| `OPENAI_CHARACTER_MODEL`, `OPENAI_SCENE_MODEL` | Optional structured-parser model overrides |
+| Setting                                        | Purpose                                                                      |
+| ---------------------------------------------- | ---------------------------------------------------------------------------- |
+| `OPENAI_API_KEY`                               | Direct structured parsing; never sent to the browser                         |
+| `PRIVATE_WORKFLOW_URL`                         | HTTPS endpoint for the private adapter                                       |
+| `PRIVATE_WORKFLOW_TOKEN`                       | Server-to-server adapter credential                                          |
+| `PRIVATE_WORKFLOW_EXECUTION_ENABLED=1`         | Enable private first-frame and export jobs                                   |
+| `PRIVATE_WORKFLOW_GPU_ENABLED=1`               | Enable Vast operations after checking the GPU worker                         |
+| `BILLING_ALLOWED_USER_IDS`                     | Optional comma-separated exact user IDs approved for sponsored work          |
+| `SPENDING_PAUSED=1`                            | Block new sponsored calls, including the owner's calls                       |
+| `EMAIL_FROM`                                   | Sender accepted by the Catalog email provider                                |
+| `REVIEW_ACCESS_EMAIL`                          | Fixed recipient used in review-access email drafts; never set by the browser |
+| `OPENAI_CHARACTER_MODEL`, `OPENAI_SCENE_MODEL` | Optional structured-parser model overrides                                   |
 
 The parser defaults in `src/jobs.ts` are `gpt-5.5` and `gpt-5.6`, with maximum
 output tokens of 5,000 and 50,000. These are output ceilings, not cost estimates.

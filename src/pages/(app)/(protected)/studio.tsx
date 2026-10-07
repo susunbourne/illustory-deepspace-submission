@@ -145,8 +145,9 @@ export default function Studio() {
   const [billingAccess, setBillingAccess] = useState<{
     userId: string
     approved: boolean
-    requestStatus: 'attempted' | 'sent' | 'failed' | null
+    requestStatus: 'requested' | null
     requestAvailable: boolean
+    mailto: string | null
   } | null>(null)
   const billingApproved = billingAccess?.userId === userId && billingAccess?.approved === true
 
@@ -237,8 +238,9 @@ export default function Studio() {
       Promise.all([
         action<{ approved: boolean }>('getBillingAccess'),
         action<{
-          requestStatus: 'attempted' | 'sent' | 'failed' | null
+          requestStatus: 'requested' | null
           requestAvailable: boolean
+          mailto: string | null
         }>('getAccessRequestStatus'),
       ])
         .then(([billing, request]) => {
@@ -328,23 +330,24 @@ export default function Studio() {
   async function requestReviewAccess() {
     if (!userId) return
     await run('request access', async () => {
-      const result = await action<{ status: 'sent' | 'attempted' | 'failed' | 'already_approved' }>(
+      const result = await action<{ status: 'requested' | 'already_approved'; mailto?: string }>(
         'requestAccess',
       )
       setBillingAccess((previous) =>
         previous?.userId === userId
-          ? { ...previous, requestStatus: result.status === 'already_approved' ? null : result.status }
+          ? {
+              ...previous,
+              requestStatus: result.status === 'already_approved' ? null : 'requested',
+              mailto: result.mailto ?? null,
+            }
           : previous,
       )
       setMessage(
-        result.status === 'sent'
-          ? 'Access request sent to the app owner. This does not grant paid generation yet.'
-          : result.status === 'failed'
-            ? 'The email could not be sent. Please contact the app owner directly.'
-            : result.status === 'already_approved'
-              ? 'Your account already has spending approval. Reload to refresh the controls.'
-              : 'Your access request is already being processed.',
+        result.status === 'already_approved'
+          ? 'Your account already has spending approval. Reload to refresh the controls.'
+          : 'Request saved. Your email app should open with a draft; press Send to contact the owner.',
       )
+      if (result.mailto) window.location.href = result.mailto
     })
   }
   async function createProject() {
@@ -609,16 +612,16 @@ export default function Studio() {
             <span>
               You can create and edit your projects. AI generation, reference search and export require
               approval from the app owner.
-              {billingAccess.requestStatus === 'sent' && ' Your access request was emailed.'}
-              {billingAccess.requestStatus === 'attempted' && ' Your request is being processed.'}
-              {billingAccess.requestStatus === 'failed' && ' Email delivery failed; contact the app owner.'}
-              {!billingAccess.requestAvailable && ' Email requests are not configured yet.'}
+              {billingAccess.requestStatus === 'requested' &&
+                ' Your request is saved. Please send the prepared email so the owner can identify you.'}
+              {!billingAccess.requestAvailable && ' Review requests are not configured yet.'}
             </span>
             {billingAccess.requestAvailable && !billingAccess.requestStatus && (
               <button disabled={!!busy} onClick={requestReviewAccess}>
                 Request access
               </button>
             )}
+            {billingAccess.mailto && <a href={billingAccess.mailto}>Open email draft</a>}
           </div>
         )}
         {message && (

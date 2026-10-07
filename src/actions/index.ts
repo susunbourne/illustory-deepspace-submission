@@ -1,4 +1,4 @@
-import { buildCronContext, enqueueJob } from 'deepspace/worker'
+import { enqueueJob } from 'deepspace/worker'
 import type { ActionContext, ActionHandler, ActionResult, ActionTools } from 'deepspace/worker'
 import type { Env } from '../../worker'
 import { assetSlot, emptyStoryboard } from '../illustory/types'
@@ -100,61 +100,42 @@ const listWorkspaces: ActionHandler<Env> = async ({ tools, userId }) => {
 }
 const getBillingAccess: ActionHandler<Env> = async ({ env, userId }) =>
   ok({ approved: canSpendOwnerCredits(env, userId) })
+const reviewMailto = (recipient: string | undefined, userId: string, requestId: string) => {
+  if (!recipient || !/^[^\s@,;<>]+@[^\s@,;<>]+\.[^\s@,;<>]+$/.test(recipient)) return null
+  const subject = 'Illustory Studio review access request'
+  const body = `Hello,\n\nI would like access to review the Illustory Studio demo.\n\nDeepSpace user ID: ${userId}\nRequest ID: ${requestId}\n\nPlease review my identity before granting workspace access or paid generation.\n`
+  return `mailto:${recipient}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
+}
 const getAccessRequestStatus: ActionHandler<Env> = async ({ env, userId, tools }) => {
-  const request = await tools.get<AccessRequest>(
-    'access-requests',
-    await stableJobId('access-request', userId),
-  )
+  const id = await stableJobId('access-request', userId)
+  const mailto = reviewMailto(env.REVIEW_ACCESS_EMAIL, userId, id)
+  const request = await tools.get<AccessRequest>('access-requests', id)
   return ok({
-    requestStatus: request.success ? request.data.record.data.notificationStatus : null,
-    requestAvailable: !!env.EMAIL_FROM && !!env.REVIEW_ACCESS_EMAIL,
+    requestStatus: request.success ? 'requested' : null,
+    requestAvailable: !!mailto,
+    mailto: request.success ? mailto : null,
   })
 }
 const requestAccess: ActionHandler<Env> = async ({ env, userId, tools }) => {
   if (!userId || userId.startsWith('anon-')) return fail('Sign in to request access', 'unauthorized')
   if (canSpendOwnerCredits(env, userId)) return ok({ status: 'already_approved' })
-  if (!env.EMAIL_FROM || !env.REVIEW_ACCESS_EMAIL)
+  const id = await stableJobId('access-request', userId)
+  const mailto = reviewMailto(env.REVIEW_ACCESS_EMAIL, userId, id)
+  if (!mailto)
     return fail(
-      'Email requests are not configured yet. Contact the app owner directly.',
+      'Review requests are not configured yet. Contact the app owner directly.',
       'service_unavailable',
     )
 
   // A known record ID makes retries and concurrent clicks one request per identity.
-  const id = await stableJobId('access-request', userId)
   const existing = await tools.get<AccessRequest>('access-requests', id)
-  if (existing.success) return ok({ status: existing.data.record.data.notificationStatus })
-  const created = await tools.create(
-    'access-requests',
-    {
-      userId,
-      requestedAt: new Date().toISOString(),
-      notificationStatus: 'attempted',
-    },
-    id,
-  )
+  if (existing.success) return ok({ status: 'requested', mailto })
+  const created = await tools.create('access-requests', { userId, requestedAt: new Date().toISOString() }, id)
   if (!created.success) {
     const concurrent = await tools.get<AccessRequest>('access-requests', id)
-    return concurrent.success ? ok({ status: concurrent.data.record.data.notificationStatus }) : created
+    return concurrent.success ? ok({ status: 'requested', mailto }) : created
   }
-
-  try {
-    const user = await tools.get<{ email?: string }>('users', userId)
-    const email = user.success ? user.data.record.data.email : undefined
-    // The requester cannot call developer-billed integrations. This one owner-billed
-    // notification is narrowly scoped to a fixed recipient and a single request ID.
-    const catalog = buildCronContext(env, env.OWNER_USER_ID, `app:${env.DEEPSPACE_APP_ID}`)
-    await catalog.integrations.call('email/send', {
-      from: env.EMAIL_FROM,
-      to: env.REVIEW_ACCESS_EMAIL,
-      subject: 'Illustory Studio review access request',
-      text: `A signed-in user requested paid test access.\n\nDeepSpace user ID: ${userId}\nAccount email: ${email ?? 'not available'}\n\nReview this identity before granting workspace and spending access. The request itself grants no permissions.`,
-    })
-    await tools.update('access-requests', id, { notificationStatus: 'sent' })
-    return ok({ status: 'sent' })
-  } catch {
-    await tools.update('access-requests', id, { notificationStatus: 'failed' })
-    return ok({ status: 'failed' })
-  }
+  return ok({ status: 'requested', mailto })
 }
 const createWorkspace: ActionHandler<Env> = async ({ params, tools, userId }) => {
   const name = str(params.name, 120)

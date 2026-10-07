@@ -88,7 +88,6 @@ export interface AccessRequest {
   [key: string]: unknown
   userId: string
   requestedAt: string
-  notificationStatus: 'attempted' | 'sent' | 'failed'
 }
 export interface Project {
   [key: string]: unknown

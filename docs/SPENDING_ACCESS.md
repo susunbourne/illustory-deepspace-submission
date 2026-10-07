@@ -34,20 +34,19 @@ the relevant workspace with the role needed for the review. Granting read access
 to an example project does not require sponsored spending approval.
 
 The Studio also offers **Request access** to signed-in users without sponsored
-approval. The server records one request per DeepSpace user ID and sends a
-notification to the fixed `REVIEW_ACCESS_EMAIL` recipient through DeepSpace
-`email/send`. The browser cannot choose the recipient or call that integration
-directly. Repeated clicks do not send another email. A request grants no
-workspace role and no spending permission. If email delivery fails, the saved
-request shows a failure and the user must contact the owner directly; an
-ambiguous provider response is not automatically retried.
+approval. The server saves one request per DeepSpace user ID and returns a
+`mailto:` draft addressed to the fixed `REVIEW_ACCESS_EMAIL` recipient. The
+browser cannot choose the recipient. The reviewer must press **Send** in their
+own email client; saving a request does not prove that an email was sent or
+delivered. The UI retains an **Open email draft** link so the reviewer can try
+again after a browser refresh. Repeated clicks reuse the same request record.
+A request grants no workspace role and no spending permission.
 
-This button requires both `EMAIL_FROM` (an accepted sender) and
-`REVIEW_ACCESS_EMAIL` (the owner's notification inbox). Without them, the UI
-states that email requests are unavailable. A live delivery test remains
-necessary before describing it as operational.
-An institutional sender-domain preflight was rejected as unverified on
-October 7; the application was not redeployed with that sender.
+This button requires `REVIEW_ACCESS_EMAIL` (the owner's inbox), but no sender
+domain or DeepSpace Email integration. If the browser has no mail client, the
+reviewer can copy their DeepSpace user ID from Settings and contact the owner
+through another channel. An earlier institutional sender-domain preflight was
+rejected as unverified; this flow does not use that sender.
 
 To allow new generation, set the complete approved ID list using
 `npx deepspace secrets set BILLING_ALLOWED_USER_IDS --stdin`, then redeploy.
@@ -67,12 +66,12 @@ being addressed. No automatic dollar cap is currently active. Establish and
 reconcile the baseline before enabling the policy; do not silently restart the
 allowance from a later deployment date.
 
-| Provider | Control and limitation |
-|---|---|
-| OpenAI | Current official docs describe monthly hard project limits, with possible propagation overrun. The agreed non-resetting total needs separate accounting. Check which projects the parser and Azure first-frame keys bill. |
-| Vast | Stopping compute still incurs disk charges. Deleting the instance is destructive and requires separate approval. |
-| Azure | Budgets notify; billing data arrives late. A shutdown action must target agreed resources. Stopping the adapter does not eliminate shared database, registry and storage costs. |
-| DeepSpace | Catalog image, voice, research and email credits are separate from the owner's direct OpenAI bill. These need their own spending policy. |
+| Provider  | Control and limitation                                                                                                                                                                                                    |
+| --------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| OpenAI    | Current official docs describe monthly hard project limits, with possible propagation overrun. The agreed non-resetting total needs separate accounting. Check which projects the parser and Azure first-frame keys bill. |
+| Vast      | Stopping compute still incurs disk charges. Deleting the instance is destructive and requires separate approval.                                                                                                          |
+| Azure     | Budgets notify; billing data arrives late. A shutdown action must target agreed resources. Stopping the adapter does not eliminate shared database, registry and storage costs.                                           |
+| DeepSpace | Catalog image, voice, research and email credits are separate from the owner's direct OpenAI bill. These need their own spending policy.                                                                                  |
 
 Sources checked October 6: [OpenAI spend limits](https://developers.openai.com/api/docs/guides/spend-limits),
 [Azure budgets](https://learn.microsoft.com/en-us/azure/cost-management-billing/costs/tutorial-acm-create-budgets),

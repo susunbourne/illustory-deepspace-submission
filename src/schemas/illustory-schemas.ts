@@ -20,7 +20,7 @@ export const illustorySchemas: CollectionSchema[] = [
   },
   {
     name: 'access-requests',
-    columns: [text('userId'), text('requestedAt'), text('notificationStatus')],
+    columns: [text('userId'), text('requestedAt')],
     permissions: serverOnly,
   },
   {
