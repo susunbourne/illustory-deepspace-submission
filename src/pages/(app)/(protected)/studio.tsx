@@ -142,7 +142,12 @@ export default function Studio() {
   const [busy, setBusy] = useState('')
   const [message, setMessage] = useState('')
   const [sessionExpired, setSessionExpired] = useState(false)
-  const [billingAccess, setBillingAccess] = useState<{ userId: string; approved: boolean } | null>(null)
+  const [billingAccess, setBillingAccess] = useState<{
+    userId: string
+    approved: boolean
+    requestStatus: 'attempted' | 'sent' | 'failed' | null
+    requestAvailable: boolean
+  } | null>(null)
   const billingApproved = billingAccess?.userId === userId && billingAccess?.approved === true
 
   const activeWorkspace = workspaces.find((w) => w.recordId === workspaceId)
@@ -229,9 +234,15 @@ export default function Studio() {
     let cancelled = false
     setBillingAccess(null)
     if (userId)
-      action<{ approved: boolean }>('getBillingAccess')
-        .then((result) => {
-          if (!cancelled) setBillingAccess({ userId, approved: result.approved })
+      Promise.all([
+        action<{ approved: boolean }>('getBillingAccess'),
+        action<{
+          requestStatus: 'attempted' | 'sent' | 'failed' | null
+          requestAvailable: boolean
+        }>('getAccessRequestStatus'),
+      ])
+        .then(([billing, request]) => {
+          if (!cancelled) setBillingAccess({ userId, ...billing, ...request })
         })
         .catch((e) => {
           if (!cancelled) setMessage(String(e))
@@ -312,6 +323,28 @@ export default function Studio() {
       setShowWorkspaceForm(false)
       await loadWorkspaces()
       setWorkspaceId(w.recordId)
+    })
+  }
+  async function requestReviewAccess() {
+    if (!userId) return
+    await run('request access', async () => {
+      const result = await action<{ status: 'sent' | 'attempted' | 'failed' | 'already_approved' }>(
+        'requestAccess',
+      )
+      setBillingAccess((previous) =>
+        previous?.userId === userId
+          ? { ...previous, requestStatus: result.status === 'already_approved' ? null : result.status }
+          : previous,
+      )
+      setMessage(
+        result.status === 'sent'
+          ? 'Access request sent to the app owner. This does not grant paid generation yet.'
+          : result.status === 'failed'
+            ? 'The email could not be sent. Please contact the app owner directly.'
+            : result.status === 'already_approved'
+              ? 'Your account already has spending approval. Reload to refresh the controls.'
+              : 'Your access request is already being processed.',
+      )
     })
   }
   async function createProject() {
@@ -573,8 +606,19 @@ export default function Studio() {
       <main className="is-main">
         {billingAccess?.userId === userId && !billingApproved && (
           <div className="is-main-notice" role="status">
-            You can create and edit your projects. AI generation, reference search and export require approval
-            from the app owner. For review access, share your user ID from Settings with the app owner.
+            <span>
+              You can create and edit your projects. AI generation, reference search and export require
+              approval from the app owner.
+              {billingAccess.requestStatus === 'sent' && ' Your access request was emailed.'}
+              {billingAccess.requestStatus === 'attempted' && ' Your request is being processed.'}
+              {billingAccess.requestStatus === 'failed' && ' Email delivery failed; contact the app owner.'}
+              {!billingAccess.requestAvailable && ' Email requests are not configured yet.'}
+            </span>
+            {billingAccess.requestAvailable && !billingAccess.requestStatus && (
+              <button disabled={!!busy} onClick={requestReviewAccess}>
+                Request access
+              </button>
+            )}
           </div>
         )}
         {message && (

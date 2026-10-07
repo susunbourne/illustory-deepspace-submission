@@ -128,6 +128,8 @@ export interface Env extends DOBindings<typeof __DO_MANIFEST__> {
   OPENAI_SCENE_MODEL?: string
   /** Verified transactional sender address, configured only through DeepSpace secrets. */
   EMAIL_FROM?: string
+  /** Fixed review-access notification recipient. Never supplied by the browser. */
+  REVIEW_ACCESS_EMAIL?: string
   /**
    * Enables /api/debug/* only when exactly "true". The route still requires
    * an authenticated app owner/admin. deepspace dev/test set it locally.

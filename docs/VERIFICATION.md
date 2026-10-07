@@ -1,6 +1,6 @@
 # Verification
 
-Last reviewed: October 6, 2026. This page separates live observations from
+Last reviewed: October 7, 2026. This page separates live observations from
 local tests. It is the current status reference for this repository.
 
 ## Live app
@@ -17,6 +17,7 @@ local tests. It is the current status reference for this repository.
 | Activity pagination | All 17 jobs visible across ranges 1–6, 7–12 and 13–17 | Large-history performance |
 | ElevenLabs speech | Implementation and deterministic response tests | Recorded live voice-generation acceptance |
 | Completion email | Export reports sender-not-configured independently of video success | Sender setup and actual delivery |
+| Review access email | One request per signed-in user, fixed recipient, and no automatic permission grant passed local tests | Sender configuration and live email delivery |
 | SeedVR2 | Private operation is wired | Installation and a real enhancement run |
 
 The owner initiated the live model and GPU generation. The agent verified the
@@ -35,7 +36,7 @@ npm run format:check
 npm run build
 ```
 
-The latest cleanup run passed TypeScript, **62 unit tests**, lint, formatting
+The latest local run passed TypeScript, **67 unit tests**, lint, formatting
 checks and the production build. Seven prompt/style constants were compared
 byte-for-byte with their pre-format values and were unchanged. The previous
 65-test report included test declarations imported through shared fixtures.
@@ -46,7 +47,7 @@ Tests cover server-side roles, spending approval, schema validation, pinned
 revisions, cancellation, stale results, idempotency, private asset validation
 and recovery without another provider submission. Test fixtures are synthetic.
 
-Earlier local browser runs covered six smoke cases and the four workspace
+The latest local browser run passed six smoke cases; earlier runs covered the four workspace
 roles. They are not live provider acceptance tests. The private adapter is
 outside this repository; the last local contract run there passed 11 tests and
 skipped four tests requiring original-engine dependencies. Earlier runs with

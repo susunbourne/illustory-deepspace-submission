@@ -19,6 +19,11 @@ export const illustorySchemas: CollectionSchema[] = [
     permissions: serverOnly,
   },
   {
+    name: 'access-requests',
+    columns: [text('userId'), text('requestedAt'), text('notificationStatus')],
+    permissions: serverOnly,
+  },
+  {
     name: 'projects',
     columns: [
       text('workspaceId'),

@@ -78,6 +78,7 @@ class Records {
   tables = new Map<string, Map<string, Stored>>()
   failNextJobSuccess = false
   emailFrom = ''
+  reviewAccessEmail = ''
   executionEnabled = true
   gpuEnabled = true
   billingAllowedUserIds = ''
@@ -156,6 +157,7 @@ class Records {
       PRIVATE_WORKFLOW_EXECUTION_ENABLED: this.executionEnabled ? '1' : '0',
       PRIVATE_WORKFLOW_GPU_ENABLED: this.gpuEnabled ? '1' : '0',
       EMAIL_FROM: this.emailFrom,
+      REVIEW_ACCESS_EMAIL: this.reviewAccessEmail,
       OPENAI_API_KEY: 'test-only',
       BILLING_ALLOWED_USER_IDS: this.billingAllowedUserIds,
       JOB_ROOMS: {},
@@ -243,6 +245,67 @@ describe('workspace authorization and revisions', () => {
   beforeEach(() => {
     enqueueJob.mockClear()
     integrationCall.mockReset()
+  })
+  it('emails one fixed-destination request without granting paid access', async () => {
+    const r = seeded()
+    r.emailFrom = 'studio@example.com'
+    r.reviewAccessEmail = 'owner@example.com'
+    r.insert('users', 'applicant', { email: 'applicant@example.com' })
+    integrationCall.mockResolvedValue({ id: 'mail-1' })
+    const [first, second] = await Promise.all([
+      invoke(r, 'requestAccess', 'applicant', { to: 'attacker@example.com' }),
+      invoke(r, 'requestAccess', 'applicant', {}),
+    ])
+    expect([first, second].map((result) => result.success)).toEqual([true, true])
+    expect(integrationCall).toHaveBeenCalledTimes(1)
+    expect(integrationCall).toHaveBeenCalledWith(
+      'email/send',
+      expect.objectContaining({ to: 'owner@example.com', subject: 'Illustory Studio review access request' }),
+    )
+    expect(r.tables.get('access-requests')?.size).toBe(1)
+    expect(await invoke(r, 'getBillingAccess', 'applicant', {})).toMatchObject({
+      success: true,
+      data: { approved: false },
+    })
+    expect(await invoke(r, 'getAccessRequestStatus', 'applicant', {})).toMatchObject({
+      success: true,
+      data: { requestStatus: 'sent', requestAvailable: true },
+    })
+    expect(await invoke(r, 'requestAccess', 'applicant', {})).toMatchObject({
+      success: true,
+      data: { status: 'sent' },
+    })
+    expect(integrationCall).toHaveBeenCalledTimes(1)
+  })
+  it('does not bill email when sender is absent or identity is anonymous', async () => {
+    const r = seeded()
+    r.reviewAccessEmail = 'owner@example.com'
+    expect(await invoke(r, 'requestAccess', 'applicant', {})).toMatchObject({
+      success: false,
+      code: 'service_unavailable',
+    })
+    r.emailFrom = 'studio@example.com'
+    expect(await invoke(r, 'requestAccess', 'anon-guest', {})).toMatchObject({
+      success: false,
+      code: 'unauthorized',
+    })
+    expect(integrationCall).not.toHaveBeenCalled()
+    expect(r.tables.get('access-requests')?.size ?? 0).toBe(0)
+  })
+  it('records email failure and never silently resends an ambiguous request', async () => {
+    const r = seeded()
+    r.emailFrom = 'studio@example.com'
+    r.reviewAccessEmail = 'owner@example.com'
+    integrationCall.mockRejectedValue(new Error('Provider unavailable'))
+    expect(await invoke(r, 'requestAccess', 'applicant', {})).toMatchObject({
+      success: true,
+      data: { status: 'failed' },
+    })
+    expect(await invoke(r, 'requestAccess', 'applicant', {})).toMatchObject({
+      success: true,
+      data: { status: 'failed' },
+    })
+    expect(integrationCall).toHaveBeenCalledTimes(1)
   })
   it('allows a new account to own and edit a workspace without granting sponsored spending', async () => {
     const r = seeded()

@@ -41,14 +41,13 @@ describe('HTTP spending boundary', () => {
       expect(upstream).not.toHaveBeenCalled()
     },
   )
-  it('requires authentication even for the read-only access indicator', async () => {
-    const response = await app(null).request(
-      '/api/actions/getBillingAccess',
-      { method: 'POST', body: '{}' },
-      env,
-    )
-    expect(response.status).toBe(401)
-  })
+  it.each(['getBillingAccess', 'getAccessRequestStatus', 'requestAccess'])(
+    'requires authentication for %s',
+    async (name) => {
+      const response = await app(null).request(`/api/actions/${name}`, { method: 'POST', body: '{}' }, env)
+      expect(response.status).toBe(401)
+    },
+  )
   it.each(['owner', 'visitor'])('returns only the caller’s approval for %s', async (caller) => {
     const response = await app(caller).request(
       '/api/actions/getBillingAccess',

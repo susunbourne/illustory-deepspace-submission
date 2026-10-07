@@ -33,6 +33,20 @@ The reviewer signs in and copies their user ID from **Settings**. Add them to
 the relevant workspace with the role needed for the review. Granting read access
 to an example project does not require sponsored spending approval.
 
+The Studio also offers **Request access** to signed-in users without sponsored
+approval. The server records one request per DeepSpace user ID and sends a
+notification to the fixed `REVIEW_ACCESS_EMAIL` recipient through DeepSpace
+`email/send`. The browser cannot choose the recipient or call that integration
+directly. Repeated clicks do not send another email. A request grants no
+workspace role and no spending permission. If email delivery fails, the saved
+request shows a failure and the user must contact the owner directly; an
+ambiguous provider response is not automatically retried.
+
+This button requires both `EMAIL_FROM` (an accepted sender) and
+`REVIEW_ACCESS_EMAIL` (the owner's notification inbox). Without them, the UI
+states that email requests are unavailable. A live delivery test remains
+necessary before describing it as operational.
+
 To allow new generation, set the complete approved ID list using
 `npx deepspace secrets set BILLING_ALLOWED_USER_IDS --stdin`, then redeploy.
 Remove an ID and redeploy to revoke future sponsored calls. Reviewers who need

@@ -1,4 +1,4 @@
-import { enqueueJob } from 'deepspace/worker'
+import { buildCronContext, enqueueJob } from 'deepspace/worker'
 import type { ActionContext, ActionHandler, ActionResult, ActionTools } from 'deepspace/worker'
 import type { Env } from '../../worker'
 import { assetSlot, emptyStoryboard } from '../illustory/types'
@@ -8,6 +8,7 @@ import { voiceChoices, youtubeReferences } from '../illustory/catalog'
 import { BILLING_ACCESS_ERROR, canSpendOwnerCredits } from '../illustory/billing-access'
 import type {
   Asset,
+  AccessRequest,
   Membership,
   Operation,
   Project,
@@ -99,6 +100,62 @@ const listWorkspaces: ActionHandler<Env> = async ({ tools, userId }) => {
 }
 const getBillingAccess: ActionHandler<Env> = async ({ env, userId }) =>
   ok({ approved: canSpendOwnerCredits(env, userId) })
+const getAccessRequestStatus: ActionHandler<Env> = async ({ env, userId, tools }) => {
+  const request = await tools.get<AccessRequest>(
+    'access-requests',
+    await stableJobId('access-request', userId),
+  )
+  return ok({
+    requestStatus: request.success ? request.data.record.data.notificationStatus : null,
+    requestAvailable: !!env.EMAIL_FROM && !!env.REVIEW_ACCESS_EMAIL,
+  })
+}
+const requestAccess: ActionHandler<Env> = async ({ env, userId, tools }) => {
+  if (!userId || userId.startsWith('anon-')) return fail('Sign in to request access', 'unauthorized')
+  if (canSpendOwnerCredits(env, userId)) return ok({ status: 'already_approved' })
+  if (!env.EMAIL_FROM || !env.REVIEW_ACCESS_EMAIL)
+    return fail(
+      'Email requests are not configured yet. Contact the app owner directly.',
+      'service_unavailable',
+    )
+
+  // A known record ID makes retries and concurrent clicks one request per identity.
+  const id = await stableJobId('access-request', userId)
+  const existing = await tools.get<AccessRequest>('access-requests', id)
+  if (existing.success) return ok({ status: existing.data.record.data.notificationStatus })
+  const created = await tools.create(
+    'access-requests',
+    {
+      userId,
+      requestedAt: new Date().toISOString(),
+      notificationStatus: 'attempted',
+    },
+    id,
+  )
+  if (!created.success) {
+    const concurrent = await tools.get<AccessRequest>('access-requests', id)
+    return concurrent.success ? ok({ status: concurrent.data.record.data.notificationStatus }) : created
+  }
+
+  try {
+    const user = await tools.get<{ email?: string }>('users', userId)
+    const email = user.success ? user.data.record.data.email : undefined
+    // The requester cannot call developer-billed integrations. This one owner-billed
+    // notification is narrowly scoped to a fixed recipient and a single request ID.
+    const catalog = buildCronContext(env, env.OWNER_USER_ID, `app:${env.DEEPSPACE_APP_ID}`)
+    await catalog.integrations.call('email/send', {
+      from: env.EMAIL_FROM,
+      to: env.REVIEW_ACCESS_EMAIL,
+      subject: 'Illustory Studio review access request',
+      text: `A signed-in user requested paid test access.\n\nDeepSpace user ID: ${userId}\nAccount email: ${email ?? 'not available'}\n\nReview this identity before granting workspace and spending access. The request itself grants no permissions.`,
+    })
+    await tools.update('access-requests', id, { notificationStatus: 'sent' })
+    return ok({ status: 'sent' })
+  } catch {
+    await tools.update('access-requests', id, { notificationStatus: 'failed' })
+    return ok({ status: 'failed' })
+  }
+}
 const createWorkspace: ActionHandler<Env> = async ({ params, tools, userId }) => {
   const name = str(params.name, 120)
   if (!name) return fail('Workspace name is required')
@@ -558,6 +615,8 @@ const selectAsset: ActionHandler<Env> = async (ctx) => {
 
 export const actions: Record<string, ActionHandler<Env>> = {
   getBillingAccess,
+  getAccessRequestStatus,
+  requestAccess,
   listWorkspaces,
   createWorkspace,
   listMembers,
