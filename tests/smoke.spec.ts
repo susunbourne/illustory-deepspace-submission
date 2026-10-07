@@ -106,6 +106,18 @@ test.describe('Smoke tests', () => {
     }
   })
 
+  test('reviewer request saves and keeps an email draft available after refresh', async ({ users }) => {
+    const [reviewer] = await users(['Illustory reviewer'])
+    await reviewer.page.goto('/studio')
+    await reviewer.page.getByRole('button', { name: 'Request access' }).click()
+    const draft = reviewer.page.getByRole('link', { name: 'Open email draft' })
+    await expect(draft).toBeVisible()
+    await expect(draft).toHaveAttribute('href', /^mailto:[^?]+\?subject=/)
+    await expect(reviewer.page.getByText('Your request is saved.')).toBeVisible()
+    await reviewer.page.reload()
+    await expect(reviewer.page.getByRole('link', { name: 'Open email draft' })).toBeVisible()
+  })
+
   test('unknown route shows 404', async ({ page }) => {
     await page.goto('/nonexistent-page-xyz')
     await waitForApp(page)

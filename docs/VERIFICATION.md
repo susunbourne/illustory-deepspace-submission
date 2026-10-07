@@ -47,7 +47,9 @@ Tests cover server-side roles, spending approval, schema validation, pinned
 revisions, cancellation, stale results, idempotency, private asset validation
 and recovery without another provider submission. Test fixtures are synthetic.
 
-The latest local browser run passed six smoke cases; earlier runs covered the four workspace
+The latest local browser run passed seven smoke cases, including a signed-in
+reviewer saving an access request and reopening the email draft after refresh;
+earlier runs covered the four workspace
 roles. They are not live provider acceptance tests. The private adapter is
 outside this repository; the last local contract run there passed 11 tests and
 skipped four tests requiring original-engine dependencies. Earlier runs with
